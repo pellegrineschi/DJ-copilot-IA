@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<MixxxMIDIPreset schemaVersion="1" mixxxVersion="2.5.0+">
+  <info>
+    <name>DJ Copilot IA — Monitor de solo lectura</name>
+    <author>DJ Copilot IA</author>
+    <description>Telemetría de dos decks mediante SysEx. No cambia controles ni reemplaza el mapeo DDJ-200.</description>
+  </info>
+  <controller id="DJ Copilot IA">
+    <scriptfiles><file filename="DJ-Copilot-IA-scripts.js" functionprefix="DJCopilotIA" /></scriptfiles>
+    <controls />
+    <outputs />
+  </controller>
+</MixxxMIDIPreset>
