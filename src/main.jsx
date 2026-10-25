@@ -37,6 +37,7 @@ import {
 import './styles.css';
 import Toggle from './components/Toggle.jsx';
 import Deck from './components/Deck.jsx';
+import Association from './components/Association.jsx';
 import { Modal, TrackEditor, Planner } from './components/editors.jsx';
 import { time, bpm } from './format.js';
 
@@ -56,6 +57,7 @@ function App() {
   const [search, setSearch] = useState('');
   const [favorites, setFavorites] = useState(false);
   const [editing, setEditing] = useState(null);
+  const [association, setAssociation] = useState(null);
   const [newPlaylist, setNewPlaylist] = useState(false);
   const [playlistName, setPlaylistName] = useState('');
 
@@ -66,7 +68,7 @@ function App() {
       return { ok: true, result };
     } catch (error) {
       setToast({ kind: 'error', text: error.message });
-      return { ok: false };
+      return { ok: false, error: error.message };
     }
   }
   const send = (action, payload) => run(() => api.command(action, payload));
@@ -414,11 +416,13 @@ function App() {
                   <div>
                     <strong>Preparación automática</strong>
                     <span>
-                      {state.engine.pending
-                        ? 'Verificando y preparando el próximo deck…'
-                        : state.engine.auto
-                          ? 'Activa · espera un deck libre y un CUE válido'
-                          : 'Desactivada · prepará cada tema cuando quieras'}
+                      {!simulation
+                        ? 'No disponible en Mixxx · sin carga por ruta verificada'
+                        : state.engine.pending
+                          ? 'Verificando y preparando el próximo deck…'
+                          : state.engine.auto
+                            ? 'Activa · espera un deck libre y un CUE válido'
+                            : 'Desactivada · prepará cada tema cuando quieras'}
                     </span>
                   </div>
                   <Toggle
@@ -446,6 +450,8 @@ function App() {
                     simulation={simulation}
                     connected={connected}
                     send={send}
+                    recorded={played.has(deck.trackId)}
+                    onAssociate={(d) => setAssociation({ deckId: d.id, token: d.identityToken })}
                   />
                 ))}
               </div>
@@ -816,8 +822,8 @@ function App() {
                 </div>
                 <h2>Elegí cómo trabajar</h2>
                 <p>
-                  La simulación permite probar la preparación completa. El puente real de este MVP
-                  monitorea dos decks.
+                  La simulación permite probar la preparación completa. El puente real monitorea dos
+                  decks y permite asociarlos manualmente con tus MP3.
                 </p>
                 <button
                   className={`mode-choice ${simulation ? 'chosen' : ''}`}
@@ -844,6 +850,21 @@ function App() {
                 <div className="connection-message">
                   <span className="eyebrow">ESTADO DEL ADAPTADOR</span>
                   <p>{state.connection.message}</p>
+                  {!simulation && (
+                    <ul className="capability-list">
+                      <li>
+                        Telemetría: {connected ? 'reciente en ambos decks' : 'esperando datos'}
+                      </li>
+                      <li>Identificación automática: no disponible en Mixxx 2.5.6</li>
+                      <li>
+                        Asociación manual:{' '}
+                        {connected && state.connection.capabilities.manualIdentity
+                          ? 'disponible con mapeo v2'
+                          : 'requiere mapeo v2 y señal reciente'}
+                      </li>
+                      <li>Carga automática: deshabilitada</li>
+                    </ul>
+                  )}
                 </div>
                 {!simulation && (
                   <button className="button" onClick={() => send('mode', { mode: 'midi' })}>
@@ -867,16 +888,16 @@ function App() {
                 </div>
               </section>
               <section className="card setup-card">
-                <span className="eyebrow">MIXXX 2.5+ · UBUNTU</span>
+                <span className="eyebrow">MIXXX 2.5.6 · UBUNTU</span>
                 <h2>Un mapeo independiente</h2>
                 <ol className="setup-steps">
                   <li>
                     <span>01</span>
                     <div>
-                      <strong>Guardá los dos archivos del puente</strong>
+                      <strong>Guardá los dos archivos del mapeo v2</strong>
                       <p>
-                        Copialos a la carpeta de controladores de usuario de Mixxx. No reemplaces el
-                        mapeo de la DDJ-200.
+                        Copialos a la carpeta de controladores de usuario de Mixxx. Los nombres v2
+                        conservan el mapeo anterior y el de la DDJ-200.
                       </p>
                       <button
                         className="button small"
@@ -885,7 +906,7 @@ function App() {
                         }
                       >
                         <Download size={14} />
-                        Guardar copia del mapeo
+                        Guardar copia del mapeo v2
                       </button>
                     </div>
                   </li>
@@ -904,8 +925,8 @@ function App() {
                     <div>
                       <strong>Abrí las preferencias de Mixxx</strong>
                       <p>
-                        En Controladores, habilitá el puerto virtual y elegí «DJ Copilot IA —
-                        Monitor de solo lectura». Reiniciá Mixxx si el puerto no aparece.
+                        En Controladores, elegí «DJ Copilot IA v2 — Asociación manual segura» solo
+                        para el puerto virtual. Usá un único mapeo por puerto y conservá la DDJ-200.
                       </p>
                     </div>
                   </li>
@@ -916,6 +937,8 @@ function App() {
                       <p>
                         Al reproducir manualmente en Mixxx deberían llegar BPM, posición y estado.
                         Solo mostramos conexión después de recibir datos válidos de los dos decks.
+                        Importá tus MP3 y usá «Asociar canción» en Cabina tras verificar el archivo
+                        en Mixxx.
                       </p>
                     </div>
                   </li>
@@ -923,9 +946,9 @@ function App() {
                 <div className="info-box">
                   <CircleHelp size={19} />
                   <p>
-                    La API verificada no permite elegir un archivo por su ruta ni leer su título. La
-                    carga automática real queda pendiente. Exportá una playlist M3U y cargá los
-                    temas desde Mixxx.
+                    En Mixxx 2.5.6 la API del mapeo no expone título ni ruta. La asociación es
+                    manual y se descarta al cambiar de canción. La carga real sigue deshabilitada:
+                    exportá una playlist M3U y cargá los temas desde Mixxx.
                   </p>
                 </div>
               </section>
@@ -970,7 +993,14 @@ function App() {
                         <div>
                           <strong>{item.title}</strong>
                           <span>
-                            {item.artist} · {item.mode === 'simulation' ? 'SIMULACIÓN' : 'MIDI'}
+                            {item.artist} ·{' '}
+                            {item.mode === 'simulation'
+                              ? 'SIMULACIÓN'
+                              : item.identity_source === 'manual'
+                                ? 'MIDI · REGISTRO MANUAL'
+                                : item.identity_source === 'confirmed'
+                                  ? 'MIDI · CONFIRMADO AUTOMÁTICAMENTE'
+                                  : 'MIDI · ORIGEN NO CONFIRMADO'}
                           </span>
                           <small>
                             {new Date(`${item.played_at.replace(' ', 'T')}Z`).toLocaleString(
@@ -986,8 +1016,8 @@ function App() {
                     <Disc3 size={30} />
                     <h3>Todavía no sonó ningún tema</h3>
                     <p>
-                      El monitor MIDI v1 no identifica títulos y no registra canciones reales por
-                      suposición.
+                      En MIDI, asociá el archivo y usá «Registrar reproducción manual» mientras
+                      suena. Se guarda como declaración tuya, sin confirmación automática.
                     </p>
                   </div>
                 )}
@@ -1026,6 +1056,21 @@ function App() {
           onSave={async (patch) => {
             const result = await send('track.update', { id: editing.id, patch });
             if (result.ok) setEditing(null);
+          }}
+        />
+      )}
+      {association && (
+        <Association
+          context={association}
+          deck={
+            !simulation ? state.connection.decks.find((d) => d.id === association.deckId) : null
+          }
+          tracks={state.tracks}
+          onClose={() => setAssociation(null)}
+          onSave={async (payload) => {
+            const result = await send('identity.associate', payload);
+            if (result.ok) setAssociation(null);
+            return result;
           }}
         />
       )}

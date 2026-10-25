@@ -118,3 +118,17 @@ test('MIDI no puede preparar ni activar automatización aunque esté conectado',
   await assert.rejects(engine.prepare(), /no disponible/);
   await assert.rejects(monitor.prepare(), /solo lectura/);
 });
+
+test('el mapeo v1 mantiene números y declara identidad desconocida sin habilitar asociación', (t) => {
+  const monitor = new MidiMonitorAdapter({ startBridge: false });
+  t.after(() => monitor.close());
+  const { packets } = runMapping();
+  packets.forEach((packet) => monitor.receive(packet));
+  const state = monitor.snapshot();
+  assert.equal(state.connected, true);
+  assert.equal(state.decks[0].bpm, 96);
+  assert.equal(state.decks[0].identity.status, 'unknown');
+  assert.equal(state.decks[0].canAssociate, false);
+  assert.equal(state.capabilities.manualIdentity, false);
+  assert.match(state.decks[0].associationReason, /Mapeo v1/);
+});

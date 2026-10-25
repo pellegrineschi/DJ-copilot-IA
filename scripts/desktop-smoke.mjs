@@ -17,7 +17,12 @@ await mkdir('artifacts', { recursive: true });
 const music = join(dataDir, 'música de prueba');
 await mkdir(music);
 await writeFile(join(music, 'Canción prueba.mp3'), mp3Fixture('Canción de prueba'));
-const app = await electron.launch({ args: ['.'], env, chromiumSandbox: true, timeout: 30000 });
+const app = await electron.launch({
+  args: ['scripts/desktop-entry.mjs'],
+  env,
+  chromiumSandbox: true,
+  timeout: 30000,
+});
 const errors = [];
 try {
   const page = await app.firstWindow();
@@ -74,18 +79,69 @@ try {
   await page.getByRole('button', { name: 'Conexión', exact: true }).click();
   await page.getByRole('button', { name: /Mixxx por MIDI/ }).click();
   state = await waitForState(
-    (s) => s.connection.mode === 'midi' && !s.connection.message.startsWith('Esperando el puerto'),
+    (s) => s.connection.mode === 'midi' && s.connection.decks.every((d) => d.canAssociate),
   );
-  console.log(`Puente: ${state.connection.message}`);
+  console.log(`Contrato MIDI con controles de prueba: ${state.connection.message}`);
   await page.getByRole('button', { name: 'Cabina', exact: true }).click();
   assert.equal(
     await page.getByRole('switch', { name: 'Preparación automática' }).isDisabled(),
     true,
   );
   await page.screenshot({ path: 'artifacts/monitor-midi.png', fullPage: true });
+  await page.getByRole('button', { name: 'Asociar canción al Deck 1' }).click();
+  const realTrack = state.tracks.find((t) => !t.isDemo);
+  await page.getByLabel('Buscar archivo importado').fill('Canción de prueba');
+  await page.getByLabel('Canción de la biblioteca').selectOption(realTrack.id);
+  assert.equal(
+    await page.getByRole('button', { name: 'Guardar asociación manual' }).isDisabled(),
+    true,
+  );
+  await page.getByLabel(/Comprobé en Mixxx/).check();
+  await page.screenshot({ path: 'artifacts/asociacion-manual.png', fullPage: true });
+  await page.getByRole('button', { name: 'Guardar asociación manual' }).click();
+  await waitForState((s) => s.connection.decks[0].identity.status === 'manual');
+  await page.getByText('Identidad seleccionada manualmente', { exact: true }).waitFor();
+  state = await page.evaluate(() => window.copilot.snapshot());
+  assert.equal(state.history.filter((h) => h.mode === 'midi').length, 0);
+  assert.equal(state.connection.decks[0].identity.path, realTrack.path);
+  await page.getByRole('button', { name: 'Registrar reproducción manual', exact: true }).click();
+  await waitForState((s) => s.history.filter((h) => h.identity_source === 'manual').length === 1);
+  await page.screenshot({ path: 'artifacts/deck-asociado.png', fullPage: true });
+  // A replacement with identical numerical values invalidates an open dialog.
+  await page.getByRole('button', { name: 'Asociar canción al Deck 1' }).click();
+  await app.evaluate(() => {
+    const { source, monitor } = globalThis.djFixture;
+    source.load(1);
+    source.flush(monitor);
+  });
+  await page.getByText('El deck o la conexión cambió.', { exact: false }).waitFor();
+  assert.equal(
+    await page.getByRole('button', { name: 'Guardar asociación manual' }).isDisabled(),
+    true,
+  );
+  await page.getByRole('button', { name: 'Cerrar ventana', exact: true }).click();
+  await waitForState((s) => s.connection.decks[0].canAssociate);
+  await page.getByRole('button', { name: 'Asociar canción al Deck 1' }).click();
+  await page.getByLabel('Canción de la biblioteca').selectOption(realTrack.id);
+  await page.getByLabel(/Comprobé en Mixxx/).check();
+  await page.getByRole('button', { name: 'Guardar asociación manual' }).click();
+  await waitForState((s) => s.connection.decks[0].identity.status === 'manual');
+  await app.evaluate(() => {
+    globalThis.djFixture.paused = true;
+  });
+  await waitForState(
+    (s) => !s.connection.connected && s.connection.decks[0].identity.status === 'unknown',
+  );
+  await app.evaluate(() => {
+    globalThis.djFixture.paused = false;
+  });
+  await waitForState((s) => s.connection.connected && s.connection.decks[0].canAssociate);
+  state = await page.evaluate(() => window.copilot.snapshot());
+  assert.equal(state.connection.decks[0].identity.status, 'unknown');
+  assert.equal(state.history.filter((h) => h.mode === 'midi').length, 1);
   assert.deepEqual(errors, []);
   console.log(
-    'OK: Electron aislado, escenario completo, cambio manual, importación real, CUE persistido, búsqueda y bloqueo MIDI.',
+    'OK: Electron aislado, simulador, importación sintética, CUE, búsqueda, asociación manual v2, historial explícito, cambio de carga, caducidad y recuperación. No es prueba física de Mixxx.',
   );
   console.log(
     'Capturas: artifacts/cabina.png, artifacts/biblioteca.png, artifacts/monitor-midi.png',

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<MixxxMIDIPreset schemaVersion="1" mixxxVersion="2.5.6+">
+  <info>
+    <name>DJ Copilot IA v2 — Asociación manual segura</name>
+    <author>DJ Copilot IA</author>
+    <description>Telemetría y eventos de carga. Solo lectura; no identifica rutas automáticamente ni modifica la DDJ-200.</description>
+  </info>
+  <controller id="DJ Copilot IA">
+    <scriptfiles><file filename="DJ-Copilot-IA-v2-scripts.js" functionprefix="DJCopilotIAv2" /></scriptfiles>
+    <controls />
+    <outputs />
+  </controller>
+</MixxxMIDIPreset>

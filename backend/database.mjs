@@ -44,7 +44,8 @@ export class LibraryDatabase {
       CREATE TABLE IF NOT EXISTS history (
         id INTEGER PRIMARY KEY, session_id TEXT NOT NULL, track_id TEXT NOT NULL REFERENCES tracks(id),
         played_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, mode TEXT NOT NULL,
-        UNIQUE(session_id, track_id)
+        identity_source TEXT NOT NULL DEFAULT 'unknown', deck_id INTEGER, load_token TEXT,
+        UNIQUE(session_id, track_id, mode)
       );
       CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS events (
@@ -52,6 +53,34 @@ export class LibraryDatabase {
       );
       INSERT OR IGNORE INTO playlists (id, name) VALUES ('default', 'Fiesta argentina');
     `);
+    // Migrate only our own library. Keep every old history row and its timestamp.
+    if (
+      !this.db
+        .prepare('PRAGMA table_info(history)')
+        .all()
+        .some((c) => c.name === 'identity_source')
+    ) {
+      this.db.exec('BEGIN IMMEDIATE');
+      try {
+        this.db.exec(`
+          ALTER TABLE history RENAME TO history_v1;
+          CREATE TABLE history (
+            id INTEGER PRIMARY KEY, session_id TEXT NOT NULL, track_id TEXT NOT NULL REFERENCES tracks(id),
+            played_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, mode TEXT NOT NULL,
+            identity_source TEXT NOT NULL DEFAULT 'unknown', deck_id INTEGER, load_token TEXT,
+            UNIQUE(session_id, track_id, mode)
+          );
+          INSERT INTO history (id,session_id,track_id,played_at,mode,identity_source)
+            SELECT id,session_id,track_id,played_at,mode,
+              CASE WHEN mode='simulation' THEN 'simulation' ELSE 'unknown' END FROM history_v1;
+          DROP TABLE history_v1;
+          COMMIT;
+        `);
+      } catch (error) {
+        this.db.exec('ROLLBACK');
+        throw error;
+      }
+    }
   }
   getTrack(id) {
     return mapTrack(this.db.prepare('SELECT * FROM tracks WHERE id=?').get(id));
@@ -183,18 +212,30 @@ export class LibraryDatabase {
       throw error;
     }
   }
-  played(session) {
+  played(session, mode = 'simulation') {
     return new Set(
       this.db
-        .prepare('SELECT track_id FROM history WHERE session_id=?')
-        .all(session)
+        .prepare('SELECT track_id FROM history WHERE session_id=? AND mode=?')
+        .all(session, mode)
         .map((r) => r.track_id),
     );
   }
-  recordPlay(session, id, mode) {
-    this.db
-      .prepare('INSERT OR IGNORE INTO history (session_id,track_id,mode) VALUES (?,?,?)')
-      .run(session, id, mode);
+  recordPlay(
+    session,
+    id,
+    mode,
+    {
+      source = mode === 'simulation' ? 'simulation' : 'unknown',
+      deckId = null,
+      loadToken = null,
+    } = {},
+  ) {
+    const result = this.db
+      .prepare(
+        'INSERT OR IGNORE INTO history (session_id,track_id,mode,identity_source,deck_id,load_token) VALUES (?,?,?,?,?,?)',
+      )
+      .run(session, id, mode, source, deckId, loadToken);
+    return Boolean(result.changes);
   }
   history() {
     return this.db

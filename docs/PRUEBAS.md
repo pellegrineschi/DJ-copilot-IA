@@ -10,9 +10,11 @@ npm run test:desktop
 
 Las pruebas de Node cubren el escenario de tres temas, ambos decks activos, deck sin referencia, reserva/manualidad, no sobrescribir un preparado, carreras durante carga, cancelación, doble clic, CUE ausente/inválido, límite de BPM, telemetría vencida, recuperación, historial, estimación, importación de MP3 sintético, archivos corruptos, duplicados, no seguir enlaces, conservación de bytes, persistencia SQLite, M3U y protocolo SysEx.
 
+Etapa 2 agrega: procedencia manual/desconocida, reemplazos 1→1 con BPM/duración idénticos, independencia de ambos decks, seek/tempo/pausa sin perder asociación, expulsión, mensajes perdidos/duplicados/fuera de orden/antiguos/futuros/incompletos, reinicio de mapeo, pérdida de escucha de cargas, conexión parcial, recuperación, hash cambiado, archivo ausente, token invalidado durante lectura, cambio de modo, historial explícito y migración v1 sin pérdida de filas. Ninguna asociación habilita preparar un deck real.
+
 La prueba de protocolo ejecuta **el archivo real de script de Mixxx** dentro de un contexto VM con controles simulados; sus bytes pasan por el decodificador de producción. No se limita a probar dos copias de un codificador inventado. Un `engine.setValue` lanzaría un error en ese contexto.
 
-La prueba Electron abre una biblioteca temporal, ensaya los tres temas, verifica que cada preparación termina pausada, importa un MP3 de prueba a través del IPC, guarda un CUE y comprueba que el monitor real no permite automático. No usa los MP3 del usuario. Capturas en `artifacts/`.
+La prueba Electron abre una biblioteca temporal, ensaya los tres temas, verifica que cada preparación termina pausada, importa un MP3 sintético a través del IPC y guarda un CUE. También abre la asociación, exige la comprobación explícita, registra historial manual, invalida una ventana al reemplazar la carga y comprueba caducidad/recuperación. `scripts/desktop-entry.mjs` reemplaza solo el arranque ALSA por controles simulados durante esta prueba; usa la ventana, preload, IPC y backend de producción. No agrega controles de prueba al renderer ni abre un segundo puerto ALSA. Capturas en `artifacts/`.
 
 ## Prueba manual de simulación
 
@@ -38,26 +40,31 @@ Los archivos deben ser aportados por el usuario; no se descargaron ni se asumió
 5. Preparar Orgullosa, ensayar el cambio y comprobar que 18 Kilates queda pausado. El primer tema cargado manualmente queda protegido: para reutilizar Deck 1 se debe vaciar/liberar explícitamente, incluso después de detenerlo. En la demo integrada el primer tema tiene propiedad del copiloto para ejercitar el ciclo continuo.
 6. Exportar M3U8 y abrirla en Mixxx. Confirmar que las tres rutas corresponden a los archivos correctos.
 
-## Prueba física del monitor MIDI (pendiente)
+## Prueba física v2 con los tres MP3 (pendiente)
 
-Hacerla fuera de una presentación en vivo. La app no controla reproducción, pero la configuración/reconexión de controladores de Mixxx puede requerir reiniciar el programa.
+El usuario ya validó telemetría v1 y coexistencia con la DDJ-200. Repetir estas comprobaciones con el nuevo preset v2 fuera de una presentación en vivo; cambiar/reconectar controladores puede requerir reiniciar Mixxx. No se necesita reproducir ni detener nada automáticamente desde Copilot.
 
 1. Ejecutar `npm run doctor` y `aconnect -l`. Confirmar que hay secuenciador ALSA.
-2. Guardar/instalar el mapeo separado según [MIXXX.md](MIXXX.md). Confirmar que el mapeo original DDJ-200 no cambió.
+2. Guardar/instalar el mapeo **v2** separado según [MIXXX.md](MIXXX.md). Confirmar que v1 y el mapeo original DDJ-200 no cambiaron. Elegir v2 solo en el puerto virtual.
 3. Activar el monitor en el copiloto y después el preset del puerto virtual en Mixxx.
 4. Verificar que la etiqueta muestra **MIDI · SOLO LECTURA** solo al llegar datos de ambos decks.
-5. Play/pause manual en cada deck y DDJ-200: comparar estado. Comprobar BPM original/actual, duración, CUE y avance aproximado. Los títulos deben decir que no están disponibles por MIDI.
-6. Mover tempo o CUE desde Mixxx y observar actualizaciones, sin movimientos autónomos de ningún control.
-7. Detener/deshabilitar el controlador virtual en Mixxx: dentro de dos segundos debe figurar «Sin señal»; nunca seguir indicando conexión reciente.
-8. Desconectar el puente, reiniciarlo y verificar que vuelve a recibir paquetes. Si el puerto cambia, reactivar el controlador virtual en Mixxx.
-9. Probar la DDJ-200 durante la recepción: reproducción, jogs, faders y EQ deben mantener su comportamiento habitual. Registrar la versión de Mixxx, sistema, nombre del puerto y resultado.
+5. Importar los MP3 reales: **El Original — Te Hago el Amor — Extended Mix**, **Eh Guacho — Orgullosa 2k26** y **18 Kilates — Me Olvidé de Ti**. No usar filas DEMO. Verificar la versión del archivo, no solo su título.
+6. Cargar El Original manualmente en Deck 1 de Mixxx. Comparar BPM original/actual, duración, CUE y posición. Copilot debe mostrar **Identidad desconocida** hasta seleccionar **Asociar canción**. Elegir el archivo, comparar su ruta con el archivo cargado en Mixxx y marcar la comprobación. Esperado: título/artista de biblioteca, etiqueta **Identidad seleccionada manualmente**, ruta asociada de biblioteca. No debe decir confirmada automáticamente.
+7. Repetir con Orgullosa en Deck 2. Asociar un deck no debe cambiar el otro. Mientras suena uno, registrar explícitamente la reproducción manual: debe aparecer una sola fila en Actividad y no repetirla en cada latido. Solo asociar o pulsar play en Mixxx no debe crear un registro real automáticamente.
+8. Desde Mixxx, reemplazar manualmente la canción de un deck detenido por 18 Kilates. La identidad anterior debe desaparecer, también si se vuelve a cargar **el mismo archivo** o se usa otro con BPM/duración iguales. Expulsar la canción también debe limpiar la asociación. Si no se limpia, volver a v1 y reportar versión/log; no confiar en v2 hasta resolverlo.
+9. Abrir la ventana de asociación y, antes de guardarla, cambiar la canción desde Mixxx. Guardar debe quedar bloqueado; abrir una nueva ventana permite comprobar y asociar la nueva carga. Cambiar tempo, posición, CUE o play/pause de la misma carga debe conservar la asociación.
+10. Deshabilitar el controlador virtual en Mixxx: al vencer los 2 s y procesarse el siguiente chequeo (intervalo de 500 ms), debe figurar **Sin señal**, borrarse la identidad vencida y bloquearse la asociación. No debe tocar reproducción ni mezcla.
+11. Reiniciar/reconectar el puente. Si el puerto cambia, reactivar el controlador virtual en Mixxx. La señal debe recuperarse y la identidad seguir desconocida hasta otra asociación. Comprobar que la preparación automática permanece deshabilitada incluso después de asociar.
+12. Probar DDJ-200 durante la recepción: reproducción, jogs, faders y EQ deben mantener su comportamiento habitual. Registrar versión, puerto, los tres archivos usados y resultado por paso.
 
-Hasta completar esto no se considera validada la comunicación física, aunque las pruebas unitarias del contrato estén aprobadas. El flujo de carga automática en Mixxx seguirá deshabilitado porque no está implementado.
+Hasta completar esto no se considera validado físicamente **el nuevo mapeo v2**, aunque v1 ya fue confirmado por el usuario. La segunda prueba de carga automática real solicitada **no corresponde en esta entrega**: la capacidad está deshabilitada porque no se dispone de confirmación automática de identidad/carga. El ciclo automático sigue siendo una prueba de simulación.
 
 ## Diagnóstico
 
 - **No aparece `/dev/snd/seq`:** la sesión/contenedor no tiene ALSA sequencer. Ejecutar la app en el escritorio Ubuntu que ve el hardware. Un administrador puede revisar módulo y permisos; la app no los modifica.
 - **Puerto listo pero sin conexión:** habilitar el preset en el puerto virtual y su salida; comprobar `aconnect -l`, el log de Mixxx y ambos decks. Tener un puerto no prueba que el script se haya cargado.
+- **Hay telemetría pero Asociar está deshabilitado:** revisar Conexión. Con v1 es lo esperado. Con v2 se necesitan datos de ambos decks, un tema cargado, escucha de eventos operativa y dos muestras durante al menos 500 ms desde la última carga. No iniciar varios presets/productores en el mismo puerto.
+- **El archivo cambió desde importar:** la asociación lo rechaza al comprobar SHA-256. No reescribe ni actualiza automáticamente la música; verificar el archivo y, si es una versión nueva, importarlo desde una ubicación nueva.
 - **Archivo corrupto:** se informa por nombre en el resultado de importación; revisar ese MP3 sin cambiar automáticamente sus bytes.
 - **Archivo movido:** la ruta guardada puede quedar obsoleta. El MVP no busca ni reemplaza archivos por similitud. Importar una copia idéntica se detecta como duplicado, por lo que la relocalización de rutas requiere una mejora posterior.
 - **Electron y sandbox de Ubuntu:** ejecutar como usuario normal. Si Chromium informa que no puede iniciar su sandbox, revisar la configuración de user namespaces/AppArmor o instalar/configurar el helper oficial de sandbox con un administrador. No se desactiva el sandbox como comportamiento normal de la app.

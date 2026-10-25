@@ -90,7 +90,7 @@ else {
           properties: ['openDirectory', 'createDirectory'],
         });
         if (choice.canceled) return null;
-        const names = ['DJ-Copilot-IA.midi.xml', 'DJ-Copilot-IA-scripts.js'];
+        const names = ['DJ-Copilot-IA-v2.midi.xml', 'DJ-Copilot-IA-v2-scripts.js'];
         // Preflight both files; never overwrite any existing mapping.
         for (const name of names) {
           try {
@@ -100,7 +100,7 @@ else {
             throw error;
           }
           throw new Error(
-            'Ya existe un archivo DJ-Copilot-IA en esa carpeta. Elegí una carpeta vacía.',
+            'Ya existe un archivo DJ-Copilot-IA-v2 en esa carpeta. Elegí una carpeta vacía.',
           );
         }
         for (const name of names)

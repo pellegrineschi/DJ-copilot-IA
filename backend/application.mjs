@@ -2,12 +2,13 @@ import { EventEmitter } from 'node:events';
 import { randomUUID } from 'node:crypto';
 import { access } from 'node:fs/promises';
 import { LibraryDatabase } from './database.mjs';
-import { importFolder } from './library.mjs';
+import { importFolder, hashFile } from './library.mjs';
 import { demoTracks } from './demo.mjs';
 import { SimulatorAdapter } from '../adapters/simulator.mjs';
 import { MidiMonitorAdapter } from '../adapters/midi/adapter.mjs';
 import { PreparationEngine } from '../core/engine.mjs';
 import { estimateSet } from '../core/recommendations.mjs';
+import { canRecordAutomatically } from '../core/identity.mjs';
 
 export class CopilotApplication extends EventEmitter {
   constructor({ databasePath, adapterFactory } = {}) {
@@ -36,7 +37,7 @@ export class CopilotApplication extends EventEmitter {
       adapter: this.adapter,
       getQueue: () =>
         this.db.queue(this.playlistId).filter((t) => mode === 'simulation' || !t.isDemo),
-      getPlayed: () => this.db.played(this.sessionId),
+      getPlayed: () => this.db.played(this.sessionId, mode),
       log: (level, text) => this.log(level, text),
       onChange: () => this.notify(),
     });
@@ -49,12 +50,15 @@ export class CopilotApplication extends EventEmitter {
         this.log('info', `MIDI: ${state.message}`);
       }
       let changed = false;
-      // Only an identified track can be recorded; MIDI v1 deliberately has no identity.
-      const played = this.db.played(this.sessionId);
+      // A manual association is an assertion by the DJ, never automatic confirmation.
+      const played = this.db.played(this.sessionId, state.mode);
       for (const deck of state.decks) {
-        if (deck.playing && deck.trackId && !played.has(deck.trackId)) {
-          this.db.recordPlay(this.sessionId, deck.trackId, state.mode);
-          changed = true;
+        if (canRecordAutomatically(state, deck) && !played.has(deck.trackId)) {
+          changed =
+            this.db.recordPlay(this.sessionId, deck.trackId, state.mode, {
+              source: state.mode === 'simulation' ? 'simulation' : 'confirmed',
+              deckId: deck.id,
+            }) || changed;
         }
       }
       if (!state.connected && this.engine.auto) {
@@ -105,7 +109,7 @@ export class CopilotApplication extends EventEmitter {
         queue: this.db.queue(this.playlistId).filter((t) => mode === 'simulation' || !t.isDemo),
         playlists: this.db.playlists(),
         playlistId: this.playlistId,
-        playedIds: [...this.db.played(this.sessionId)],
+        playedIds: [...this.db.played(this.sessionId, mode)],
         history: this.db.history(),
         events: this.db.events(),
         plan: estimateSet(this.plan),
@@ -194,10 +198,69 @@ export class CopilotApplication extends EventEmitter {
       case 'restoreSkipped':
         this.engine.skipped.clear();
         break;
-      case 'track.update':
+      case 'track.update': {
         this.engine.cancel();
-        this.db.updateTrack(payload.id, payload.patch || {});
+        const track = this.db.updateTrack(payload.id, payload.patch || {});
+        this.adapter.updateLinkedTrack?.(track);
         break;
+      }
+      case 'identity.associate': {
+        const adapter = this.adapter;
+        if (adapter.snapshot().mode !== 'midi' || !adapter.assertAssociationContext)
+          throw new Error('La asociación corresponde a decks reales con mapeo v2.');
+        adapter.assertAssociationContext(payload.deckId, payload.token);
+        if (payload.checkedInMixxx !== true)
+          throw new Error('Comprobá en Mixxx que elegiste el archivo correcto.');
+        const track =
+          typeof payload.trackId === 'string' ? this.db.getTrack(payload.trackId) : null;
+        if (!track || track.isDemo || !track.path || !track.hash)
+          throw new Error('Elegí un MP3 real importado en la biblioteca.');
+        let hash;
+        try {
+          hash = await hashFile(track.path);
+        } catch {
+          throw new Error(
+            'El archivo de la biblioteca ya no está disponible. Revisá su ubicación.',
+          );
+        }
+        if (hash !== track.hash)
+          throw new Error(
+            'El archivo cambió desde la importación. Volvé a importarlo desde una ubicación nueva.',
+          );
+        if (this.closed || this.adapter !== adapter)
+          throw new Error('La conexión cambió durante la asociación. Volvé a comprobar el deck.');
+        // Recheck after disk I/O: a load, timeout or another dialog revokes the token.
+        adapter.associate(payload.deckId, this.db.getTrack(track.id), payload.token);
+        this.log(
+          'info',
+          `Deck ${payload.deckId}: asociación manual con ${track.artist} — ${track.title}. La ruta no fue confirmada por Mixxx.`,
+        );
+        break;
+      }
+      case 'identity.clear': {
+        if (this.adapter.snapshot().mode !== 'midi')
+          throw new Error('Acción exclusiva del monitor MIDI.');
+        this.adapter.clearAssociation(payload.deckId, payload.token);
+        this.log('info', `Deck ${payload.deckId}: asociación manual eliminada.`);
+        break;
+      }
+      case 'identity.record': {
+        if (this.adapter.snapshot().mode !== 'midi')
+          throw new Error('Acción exclusiva del monitor MIDI.');
+        const deck = this.adapter.assertAssociationContext(payload.deckId, payload.token);
+        if (!deck.playing || deck.identity.status !== 'manual' || !deck.trackId)
+          throw new Error(
+            'Solo podés registrar un deck reproduciendo con asociación manual vigente.',
+          );
+        const added = this.db.recordPlay(this.sessionId, deck.trackId, 'midi', {
+          source: 'manual',
+          deckId: deck.id,
+          loadToken: `${deck.bridgeSession}:${deck.loadGeneration}`,
+        });
+        if (added)
+          this.log('info', `Reproducción declarada manualmente: ${deck.artist} — ${deck.title}.`);
+        break;
+      }
       case 'queue.set':
         this.engine.cancel();
         this.db.setQueue(this.playlistId, payload.ids);
@@ -227,7 +290,7 @@ export class CopilotApplication extends EventEmitter {
         const track = this.db.getTrack(payload.id);
         if (!track || (track.isDemo && this.adapter.snapshot().mode !== 'simulation'))
           throw new Error('Tema no disponible.');
-        if (this.db.played(this.sessionId).has(track.id))
+        if (this.db.played(this.sessionId, this.adapter.snapshot().mode).has(track.id))
           throw new Error('Este tema ya sonó en la sesión. Creá una sesión nueva para repetirlo.');
         this.engine.cancel();
         this.engine.skipped.delete(track.id);

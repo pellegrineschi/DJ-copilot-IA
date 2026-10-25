@@ -2,11 +2,13 @@
 
 Aplicación de escritorio para Ubuntu con Electron, React, Vite, Node.js y SQLite. Prepara una biblioteca y permite ensayar la selección del próximo tema mientras vos decidís cuándo mezclar.
 
-**Estado del MVP:** preparación completa en un simulador sin audio; puente MIDI real de **solo lectura**, pendiente de validación física con Mixxx/DDJ-200. No se presenta el simulador como una conexión real. No se implementó carga automática de archivos en Mixxx: la API de controller scripting verificada no ofrece carga por ruta ni identidad textual del tema. La alternativa actual es exportar una playlist M3U y cargarla manualmente en Mixxx.
+**Etapa 2:** asociación manual entre cada deck real y un MP3 importado, con título, artista y ruta de biblioteca claramente marcados como selección del usuario. El mapeo v2 detecta nuevas cargas y descarta asociaciones anteriores. No identifica canciones por BPM/duración ni presenta una selección manual como confirmación automática.
+
+El usuario ya confirmó la telemetría v1 con Mixxx y la coexistencia de la DDJ-200. Esa integración se conserva sin cambios. El nuevo mapeo v2 está probado automáticamente; falta probarlo físicamente con los tres MP3 reales. En **Mixxx 2.5.6**, la API de mapeos inspeccionada no expone título/ruta ni carga por ruta con confirmación. **La preparación automática real continúa deshabilitada.** La preparación completa sigue disponible en el simulador sin audio. Ver [evidencia y límites](docs/MIXXX.md).
 
 ## Empezar en Ubuntu
 
-Requisitos: Node.js **24 o posterior**, npm y una sesión gráfica. Mixxx **2.5+**, Python 3 y `libasound.so.2` solo hacen falta para el monitor MIDI. No se necesitan módulos npm nativos de SQLite o MIDI, compilador C++ ni paquetes pip.
+Requisitos: Node.js **24 o posterior**, npm y una sesión gráfica. Mixxx **2.5.6** es la versión investigada; Python 3 y `libasound.so.2` solo hacen falta para el monitor MIDI. No se necesitan módulos npm nativos de SQLite o MIDI, compilador C++ ni paquetes pip.
 
 ```bash
 cd "/opt/lampp/htdocs/DJ copilot IA"
@@ -56,16 +58,27 @@ La demo usa los nombres solicitados, pero **BPM, duración y CUE son fixtures fi
 
 ## Alcance y límites
 
-| Función                                                  | Simulación               | Mixxx MIDI v1                        |
-| -------------------------------------------------------- | ------------------------ | ------------------------------------ |
-| Estado de reproducción de dos decks                      | Sí, sintético            | Implementado; requiere prueba física |
-| BPM originales/actuales, posición, duración, CUE         | Datos de biblioteca/demo | Control Objects numéricos            |
-| Título e identidad del tema cargado                      | Sí                       | No disponible; se dice en pantalla   |
-| Carga por ruta en deck libre                             | Simulada y protegida     | No implementada                      |
-| Preparación automática tras el cambio                    | Sí, sin audio            | Deshabilitada                        |
-| Ajuste de tempo y CUE                                    | Simulado                 | Sin escrituras a Mixxx               |
-| Play, mezcla, faders, EQ y efectos automáticos           | Nunca                    | Nunca                                |
-| Biblioteca, playlists, CUE local, favoritos, exportación | Sí                       | Sí                                   |
+| Función                                                    | Simulación           | Mixxx MIDI v1 / v2                                |
+| ---------------------------------------------------------- | -------------------- | ------------------------------------------------- |
+| Reproducción, BPM original/actual, posición, duración, CUE | Biblioteca/demo      | Telemetría numérica; v1 validado por el usuario   |
+| Título y artista del deck                                  | Sí                   | v1 desconocido; v2 selección manual de biblioteca |
+| Ruta e identidad confirmadas por Mixxx                     | No aplica            | No disponibles; la ruta asociada es de biblioteca |
+| Descartar identidad en cada nueva carga                    | Sí                   | v2: eventos y generación por deck                 |
+| Carga por ruta y preparación automática                    | Simulada y protegida | Deshabilitadas                                    |
+| Ajuste de tempo y CUE                                      | Simulado             | Sin escrituras                                    |
+| Play, mezcla, faders, EQ y efectos automáticos             | Nunca                | Nunca                                             |
+| Biblioteca, playlists, CUE local, favoritos, M3U           | Sí                   | Sí                                                |
+
+## Asociar tus canciones en Mixxx
+
+1. Compilá y abrí la app con `npm run build` y `npm start`.
+2. **Conexión → Guardar copia del mapeo v2**. Instalá sus dos archivos según [MIXXX.md](docs/MIXXX.md). Tienen nombres nuevos: no reemplazan v1 ni el mapeo Pioneer. Elegí el preset v2 únicamente para el puerto virtual DJ Copilot IA.
+3. Importá tus MP3. Cargá el archivo en Mixxx desde su biblioteca o una playlist M3U exportada.
+4. En **Cabina → Asociar canción**, elegí el archivo importado y comprobá en Mixxx que es el mismo. Guardá la asociación manual. El título y artista provienen de la biblioteca; BPM, duración, CUE y posición siguen viniendo de Mixxx.
+5. Al reemplazar o expulsar una canción, reiniciar el mapeo o vencer la telemetría, la identidad vuelve a **desconocida**. Reasociá después de comprobarla. Un cambio de tempo o posición no invalida la asociación.
+6. Si querés guardar esa reproducción, pulsá **Registrar reproducción manual** mientras el deck suena. Actividad indica su procedencia manual; no se genera un registro real automáticamente a partir de una asociación.
+
+El archivo se vuelve a leer y se compara con el SHA-256 de la importación antes de asociarlo. Esto comprueba el archivo local, **no prueba qué archivo tiene cargado Mixxx**. Las asociaciones se mantienen solo durante la conexión actual. Los ensayos y el historial real tienen deduplicación separada por sesión, canción y modo.
 
 La app no observa con certeza que el DJ esté preparando manualmente un deck real; por eso el monitor no usa «pausado» como autorización de carga. No lee ni modifica la base de Mixxx, no opera su GUI, no cambia su selección de biblioteca ni reescribe el mapeo de la DDJ-200.
 
@@ -93,7 +106,7 @@ npm run build            # compilación de producción
 npm run test:desktop     # abre Electron con datos temporales; genera capturas
 ```
 
-La prueba de escritorio usa una carpeta temporal, un MP3 sintético de prueba y diálogos controlados. No importa tu música ni instala el mapeo. Las capturas se guardan en `artifacts/`.
+La prueba de escritorio usa una carpeta temporal, un MP3 sintético, controles de Mixxx simulados y diálogos controlados. Ejecuta el mapeo v2 y el decodificador de producción, sin crear otro puerto ALSA, importar tu música ni instalar mapeos. No demuestra integración física. Las capturas se guardan en `artifacts/`.
 
 ```text
 src/                    Interfaz React y estilos locales
