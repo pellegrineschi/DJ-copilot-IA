@@ -1,51 +1,79 @@
-# Validación · etapa 2
+# Validación · etapa 3
 
-Fecha: 25 de octubre de 2026. Ubuntu; Mixxx instalado `2.5.6-1~noble`; Node `24.14.1`; Electron `44.9.3`. Las versiones npm resueltas quedan en `package-lock.json`; no se agregaron dependencias en esta etapa.
+Fecha: 25 de octubre de 2026. Ubuntu; Mixxx instalado `2.5.6-1~noble`; Node `24.14.1`; Electron `44.9.3`; Qt de runtime/headers `6.4.2`. Las versiones npm resueltas quedan en `package-lock.json`; no se agregaron dependencias npm.
 
-| Comprobación                                                      | Resultado                                               |
-| ----------------------------------------------------------------- | ------------------------------------------------------- |
-| Motor y seguridad                                                 | 22 pruebas aprobadas                                    |
-| Biblioteca, importación, persistencia y exportación               | 4 pruebas aprobadas                                     |
-| Contrato v1, parser, frescura, compatibilidad y lectura exclusiva | 6 pruebas aprobadas                                     |
-| Identidad v2, eventos, asociación, biblioteca e historial         | 14 pruebas aprobadas                                    |
-| `npm run build`                                                   | Compilación de producción aprobada                      |
-| `npm run format:check`                                            | Aprobado                                                |
-| `npm run test:desktop`                                            | Aprobado con Electron abierto y `chromiumSandbox: true` |
-| Preservación de integración v1                                    | Script v1, XML v1 y receptor ALSA sin cambios           |
-| Telemetría v1 de Mixxx real / uso simultáneo de DDJ-200           | Validado por el usuario antes de esta etapa             |
-| Mapeo v2 en Mixxx real y asociación con los tres MP3              | Pendiente de prueba física del usuario                  |
-| Identificación automática de archivo                              | No disponible en la API de mapeos 2.5.6 inspeccionada   |
-| Carga automática real en Mixxx                                    | No implementada; capacidad deshabilitada                |
+**Resultado: prototipo de comunicación/observación/comprobación integrado. No se implementó la carga automática real.** La Fase B original, que requiere cargar un MP3 por ruta y dejarlo pausado, sigue pendiente de una transacción segura dentro del motor. El servidor y el cliente niegan carga, tempo y CUE aunque se intente enviar la orden directamente.
 
-**46 casos automatizados** distribuidos en cuatro archivos. `npm test` puede mostrar el resumen por archivo en este entorno. Las 31 pruebas originales se conservan; se agregan 15. `tests/identity.test.mjs` ejecuta el script v2 distribuido con un `engine` de prueba, pasa sus paquetes por el decodificador/adaptador de producción y comprueba:
+| Comprobación                                                        | Resultado y alcance                                                                                            |
+| ------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| Motor y seguridad                                                   | 22 casos aprobados; simulador                                                                                  |
+| Biblioteca, importación, persistencia y exportación                 | 4 casos aprobados                                                                                              |
+| Contrato MIDI v1 y transporte                                       | 6 casos aprobados                                                                                              |
+| Identidad/asociación MIDI v2 e historial                            | 14 casos aprobados                                                                                             |
+| Cliente nativo, protocolo, historial y bloqueos                     | 9 casos aprobados; mensajes de prueba, sin Mixxx                                                               |
+| Servidor C++ + cliente Node por Unix socket real                    | 8 casos aprobados; permisos, autorización, vencimiento, rutas, cancelación, duplicados y rechazo de escrituras |
+| `npm run build`                                                     | Compilación web de producción aprobada                                                                         |
+| `npm run format:check`                                              | Aprobado                                                                                                       |
+| `npm run test:desktop`                                              | Aprobado; Electron con `chromiumSandbox: true`; simulación, MIDI artificial y modo nativo sin puente           |
+| Servidor C++ independiente                                          | Compilado con g++ C++17, Qt6 Core/Network, `-Wall -Wextra -Werror`                                             |
+| Archivo de integración `copilot_bridge.cpp`                         | Compilado a objeto con C++20 contra headers reales de Mixxx 2.5.6; no link de Mixxx completo                   |
+| Parche sobre checkout separado                                      | Aplicado al commit fijado; diff comprobado                                                                     |
+| Compilar/linkear y ejecutar Mixxx completo modificado               | **Pendiente**                                                                                                  |
+| Identidad nativa con MP3 reales / DDJ-200                           | **Pendiente de prueba física**                                                                                 |
+| Carga automática real, tempo y CUE nativos                          | **No implementados; capacidades deshabilitadas**                                                               |
+| MIDI v2, asociación, invalidación, desconexión/reconexión y DDJ-200 | **Confirmados físicamente por el usuario** al iniciar etapa 3; no se repitió hardware durante esta entrega     |
 
-- Estado desconocido/manual y vínculo con UUID/hash/ruta del archivo importado; ninguna identidad confirmada automáticamente inventada.
-- Reemplazo 1→1 con valores numéricos idénticos, independencia de decks, expulsión y pérdida de un paquete recuperada por el contador del latido siguiente.
-- Conservación de asociación al cambiar tempo/posición/play; invalidación por vencimiento, reinicio, pérdida del seguimiento y cambio de modo.
-- Rechazo de datos incompletos, corruptos, duplicados, fuera de orden, antiguos o futuros; conexión parcial y recuperación después de errores.
-- Verificación del archivo local, rechazo si cambia/desaparece, y token revocado mientras se lee el archivo.
-- Historial manual explícito, prohibición de registrar un deck pausado/desconocido, deduplicación entre decks y separación de simulación/MIDI.
-- Migración de una base con esquema v1 conservando IDs, fechas y pistas, también después de reabrirla.
-- Preparación/automático reales bloqueados aun después de asociar una canción que está reproduciéndose.
+## Pruebas de aplicación
 
-La prueba Electron comprobó el ciclo de simulación de los tres temas, pausa del tema preparado, importación de MP3 sintético por diálogo/IPC, CUE de 1,25 s y búsqueda. Después abrió la asociación manual, comprobó que requiere marcar la verificación, mostró título/artista/ruta, registró explícitamente la reproducción y rechazó una ventana vieja después de un cambio de carga. También comprobó caducidad y recuperación sin restaurar la asociación anterior. Las esperas consultan el resultado resuelto del IPC, no una promesa tratada como verdadera.
+**55 casos Node**, distribuidos en cinco archivos. `npm test` puede mostrar el resumen por archivo en este entorno. Se conservan los 46 casos anteriores y se agregan 9. Los existentes cubren la preparación protegida del simulador, persistencia, importación sin cambiar bytes, protocolo MIDI, asociación manual y migración v1.
 
-Se corrigió el arranque desde editores que heredan `ELECTRON_RUN_AS_NODE=1`: los lanzadores de producción, desarrollo y pruebas eliminan esa variable para iniciar Electron como aplicación gráfica. No se usa `--no-sandbox`.
+Las pruebas nuevas de `tests/native.test.mjs` comprueban:
 
-En la entrega inicial del 22 de octubre, Electron pudo crear el puerto ALSA `128:0`; luego el usuario confirmó la recepción efectiva desde Mixxx y el uso simultáneo de la Pioneer. **La prueba de escritorio de etapa 2 usa un arranque de prueba separado, sin crear un puerto ALSA real** para no competir con la conexión existente. Ejecuta la ventana, preload, IPC y backend de producción, con controles y datos de prueba. Esto no valida callbacks del nuevo preset dentro de Mixxx real.
+- Identidad con procedencia nativa válida y vínculo exacto con biblioteca; ninguna capacidad extra anunciada por el servidor habilita carga.
+- Rechazo del ejecutable `fixture-only` por el cliente de producción.
+- Autenticación sin primer estado, mensajes inválidos, sesiones equivocadas, secuencias repetidas, fechas antiguas/futuras y campos fuera de rango.
+- Descarte de un resultado de biblioteca si cambió la carga mientras se resolvía.
+- Cancelación, timeout, rechazo de ACK tardío y ausencia de reenvío de operaciones.
+- Historial real compartido entre MIDI/nativo y separado de simulación.
+- Conservación de modos existentes y bloqueo de automático/preparación nativa.
 
-Capturas de Electron con biblioteca y telemetría de prueba; no son evidencia de identificación de los MP3 del usuario:
+No ejecutan Mixxx. Sus mensajes identificados como nativos ejercitan el cliente, no certifican audio ni un MP3 real.
 
-- [Cabina y escenario de tres temas](../artifacts/cabina.png).
-- [Biblioteca con MP3 sintético importado](../artifacts/biblioteca.png).
-- [Monitor v2 con identidad desconocida](../artifacts/monitor-midi.png).
-- [Selector de asociación manual](../artifacts/asociacion-manual.png).
-- [Deck asociado y registro manual](../artifacts/deck-asociado.png).
+## Transporte C++ real
 
-No se aportaron ni descargaron los MP3 de El Original, Eh Guacho o 18 Kilates. No se modificó el mapeo DDJ-200 ni ningún archivo de música del usuario. No hubo generación de audio, reproducción automática real ni envío de música a servicios externos.
+`npm run test:native` construye `native/bridge_server.cpp` con `native/tests/fixture.cpp`; conecta `NativeAdapter` por sockets Unix reales. Los 8 casos verifican directorio/token/socket privados, autenticación, comprobación sin carga, comandos prohibidos, destino ocupado, revisiones de ambos decks, permiso de 10 s y vencimiento, ambos decks activos, rutas inexistentes/fuera de raíz/symlinks, cancelación, reconexión con nueva sesión, IDs duplicados y credencial incorrecta.
 
-## Pendientes físicos y límites
+Los archivos con extensión MP3 de estos tests contienen texto de fixture: se prueba acceso/ruta, **no decodificación ni reproducción**. El cliente de aplicación no acepta ese proveedor de pruebas. No se arrancó un segundo puerto ALSA ni se conectó a un puente del usuario.
 
-Completar [la prueba v2 con los tres MP3](PRUEBAS.md): seleccionar el preset separado, asociar ambos decks, reemplazar/recargar incluso con números idénticos, expulsar, comprobar desconexión/reconexión y coexistencia DDJ-200. Hasta entonces v2 se considera implementado y probado con controles simulados, **pendiente de validación física**.
+La sandbox bloqueó `QLocalServer::listen`; el mismo comando se ejecutó con autorización fuera de la sandbox. No se relajaron permisos del socket ni se habilitó red para hacerlo pasar.
 
-La ruta/hash comprobada es del archivo importado en Copilot: no confirma el archivo abierto por Mixxx. El estado manual siempre depende de que el DJ elija el archivo correcto. La investigación y la alternativa nativa para una carga futura con confirmación están en [MIXXX.md](MIXXX.md). La preparación automática real queda deshabilitada y no corresponde ejecutar la segunda prueba física de carga automática todavía.
+## Compilación contra Mixxx
+
+Se descargó un checkout oficial separado en `/tmp/dj-copilot-mixxx-2.5.6`, fijado en `3ebac449e7e5fe2a0186596657696e87ce8b0e56`. Se aplicó `scripts/native-prepare.mjs` y se verificó el diff. No se modificó `/usr/bin/mixxx`, ningún perfil estable ni archivos del mapeo DDJ-200.
+
+El entorno no tenía CMake ni el conjunto completo de dependencias de desarrollo de Mixxx. Se descargaron y extrajeron paquetes de headers/herramientas **en `/tmp`**, sin instalarlos en el sistema. Se generó `keys.pb.h` con Protobuf 3.21 y se compiló `copilot_bridge.cpp` a `/tmp/dj-copilot-mixxx-observer.o`, usando los headers reales del tag y C++20. Esto comprueba tipos, señales y llamadas del observador; no comprueba enlazado, inicialización ni comportamiento de audio de Mixxx completo. El header upstream `rigtorp/SPSCQueue` emitió la advertencia de GCC sobre `hardware_destructive_interference_size`; no hubo errores de compilación.
+
+El servidor independiente sí se enlazó con las bibliotecas Qt6 Core/Network instaladas y se ejecutó en los tests de socket. No confundir ese ejecutable fixture con un Mixxx modificado funcional.
+
+## Prueba Electron y capturas
+
+La prueba abrió una biblioteca temporal, ensayó los tres temas sin audio, verificó pausa de los preparados, importó un MP3 sintético y guardó un CUE. Luego ejercitó asociación MIDI v2, comprobación explícita del usuario, título/artista/ruta, historial manual, cambio de carga, caducidad y recuperación. Finalmente seleccionó el modo nativo con una dirección de prueba inexistente y comprobó conexión caída, identidad desconocida, controles de preparación/autorización deshabilitados y cancelación.
+
+`desktop-entry.mjs` sustituye únicamente el arranque ALSA por la VM del mapeo durante la prueba; usa ventana, preload, IPC y backend de producción. No crea otro puerto MIDI real. Las esperas consultan el resultado resuelto del IPC. El sandbox de Chromium permanece activo.
+
+Capturas locales generadas en `artifacts/` (datos de prueba; no evidencia de hardware):
+
+- [Cabina simulada](../artifacts/cabina.png).
+- [Biblioteca sintética](../artifacts/biblioteca.png).
+- [Monitor MIDI de prueba](../artifacts/monitor-midi.png).
+- [Asociación manual](../artifacts/asociacion-manual.png).
+- [Deck asociado](../artifacts/deck-asociado.png).
+- [Prototipo nativo sin puente, carga bloqueada](../artifacts/nativo-prototipo.png).
+
+No se aportaron ni descargaron los MP3 del usuario. No hubo reproducción automática real, envío de música a servicios externos ni escrituras en los controles de Mixxx.
+
+## Validación pendiente
+
+Seguir [NATIVO.md](NATIVO.md) para compilar la variante completa, ejecutarla con perfil separado, probar señales/identidad y comprobaciones con DDJ-200 y volver al Mixxx estable. El nuevo protocolo no reemplaza el MIDI validado por el usuario.
+
+La preparación real de Orgullosa y luego 18 Kilates requiere implementar primero el commit de carga cancelable dentro del motor, sin cierre anticipado de fuente, cambios de play, resets de EQ/ganancia o propagación de tempo al deck activo. Después deben verificarse fallos y carreras reales, archivo confirmado, pausa final, tempo y CUE. No activar capacidades para saltarse esos pasos. El diseño, evidencia y tareas concretas están documentados en la guía nativa.

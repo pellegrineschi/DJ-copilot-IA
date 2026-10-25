@@ -2,13 +2,15 @@
 
 Aplicación de escritorio para Ubuntu con Electron, React, Vite, Node.js y SQLite. Prepara una biblioteca y permite ensayar la selección del próximo tema mientras vos decidís cuándo mezclar.
 
-**Etapa 2:** asociación manual entre cada deck real y un MP3 importado, con título, artista y ruta de biblioteca claramente marcados como selección del usuario. El mapeo v2 detecta nuevas cargas y descarta asociaciones anteriores. No identifica canciones por BPM/duración ni presenta una selección manual como confirmación automática.
+**Etapa 3 · prototipo nativo:** cliente Node/UI integrado, servidor C++ con socket Unix privado, autenticación, identidad mediante señales nativas y comprobación de archivos/decks. Incluye un parche para una variante **separada de Mixxx 2.5.6**. El transporte está probado; el observador C++ compiló a objeto contra los headers reales de Mixxx. La variante completa todavía no fue compilada ni ejecutada con audio.
 
-El usuario ya confirmó la telemetría v1 con Mixxx y la coexistencia de la DDJ-200. Esa integración se conserva sin cambios. El nuevo mapeo v2 está probado automáticamente; falta probarlo físicamente con los tres MP3 reales. En **Mixxx 2.5.6**, la API de mapeos inspeccionada no expone título/ruta ni carga por ruta con confirmación. **La preparación automática real continúa deshabilitada.** La preparación completa sigue disponible en el simulador sin audio. Ver [evidencia y límites](docs/MIXXX.md).
+**La carga por ruta y preparación automática real continúan deshabilitadas.** La ruta interna de carga de Mixxx requiere cambios adicionales para evitar carreras con PLAY y resets de EQ/ganancia. No se presenta una comprobación como carga o preparación. Ver [investigación, instalación aislada, pruebas y recuperación](docs/NATIVO.md).
+
+El usuario confirmó físicamente **MIDI v2**, asociación manual, invalidación al cambiar de canción, desconexión/reconexión y coexistencia con la DDJ-200. Se conserva esa integración y el simulador de preparación sin audio. La asociación manual sigue disponible en modo MIDI.
 
 ## Empezar en Ubuntu
 
-Requisitos: Node.js **24 o posterior**, npm y una sesión gráfica. Mixxx **2.5.6** es la versión investigada; Python 3 y `libasound.so.2` solo hacen falta para el monitor MIDI. No se necesitan módulos npm nativos de SQLite o MIDI, compilador C++ ni paquetes pip.
+Requisitos: Node.js **24 o posterior**, npm y una sesión gráfica. Mixxx **2.5.6** es la versión investigada; Python 3 y `libasound.so.2` solo hacen falta para el monitor MIDI. La app, simulador y MIDI no necesitan módulos npm nativos de SQLite/MIDI, compilador C++ ni paquetes pip. El prototipo nativo opcional tiene requisitos de desarrollo adicionales en [NATIVO.md](docs/NATIVO.md).
 
 ```bash
 cd "/opt/lampp/htdocs/DJ copilot IA"
@@ -58,16 +60,22 @@ La demo usa los nombres solicitados, pero **BPM, duración y CUE son fixtures fi
 
 ## Alcance y límites
 
-| Función                                                    | Simulación           | Mixxx MIDI v1 / v2                                |
-| ---------------------------------------------------------- | -------------------- | ------------------------------------------------- |
-| Reproducción, BPM original/actual, posición, duración, CUE | Biblioteca/demo      | Telemetría numérica; v1 validado por el usuario   |
-| Título y artista del deck                                  | Sí                   | v1 desconocido; v2 selección manual de biblioteca |
-| Ruta e identidad confirmadas por Mixxx                     | No aplica            | No disponibles; la ruta asociada es de biblioteca |
-| Descartar identidad en cada nueva carga                    | Sí                   | v2: eventos y generación por deck                 |
-| Carga por ruta y preparación automática                    | Simulada y protegida | Deshabilitadas                                    |
-| Ajuste de tempo y CUE                                      | Simulado             | Sin escrituras                                    |
-| Play, mezcla, faders, EQ y efectos automáticos             | Nunca                | Nunca                                             |
-| Biblioteca, playlists, CUE local, favoritos, M3U           | Sí                   | Sí                                                |
+| Función                                     | Simulación                 | Mixxx MIDI v2                      | Prototipo nativo                                           |
+| ------------------------------------------- | -------------------------- | ---------------------------------- | ---------------------------------------------------------- |
+| BPM, posición, duración, reproducción y CUE | Datos de prueba/biblioteca | Telemetría validada por el usuario | Lectura C++ pendiente de prueba física                     |
+| Título, artista e identidad                 | Biblioteca/demo            | Asociación manual                  | Señal nativa de carga y ruta; requiere variante modificada |
+| Descartar identidad al cambiar carga        | Sí                         | Generación por deck                | Señales nativas y revisión                                 |
+| Carga por ruta y preparación automática     | Simulada y protegida       | Deshabilitadas                     | Deshabilitadas                                             |
+| Ajuste de tempo y CUE                       | Simulado                   | Sin escrituras                     | Sin escrituras                                             |
+| Autorizar y comprobar archivo/deck          | No aplica                  | No aplica                          | Permiso por 10 s; nunca carga                              |
+| Mezcla, faders, EQ y efectos automáticos    | Nunca                      | Nunca                              | Nunca                                                      |
+| Biblioteca, playlist, favoritos, M3U        | Sí                         | Sí                                 | Sí                                                         |
+
+## Prototipo nativo
+
+El Mixxx estable no contiene el puente. Para usar el nuevo modo necesitás compilar el checkout modificado y abrirlo con un perfil separado mediante `scripts/native-launch.mjs`. El lanzador imprime el comando para abrir Copilot con el directorio IPC de esa sesión. Elegí **Conexión → Mixxx nativo · prototipo**. Las instrucciones completas y los límites están en [NATIVO.md](docs/NATIVO.md); no se sustituyó tu instalación estable.
+
+El objetivo de cargar Orgullosa y después 18 Kilates automáticamente **todavía no se alcanzó**. La Fase A está documentada, la Fase B entrega transporte/observación/comprobación sin carga, la Fase C integra esas capacidades, y la Fase D queda bloqueada. No se incorporó OpenAI ni voz.
 
 ## Asociar tus canciones en Mixxx
 
@@ -104,6 +112,7 @@ El renderer tiene aislamiento de contexto, sandbox, Node deshabilitado, CSP y un
 npm test                 # pruebas unitarias/integración locales
 npm run build            # compilación de producción
 npm run test:desktop     # abre Electron con datos temporales; genera capturas
+npm run test:native      # opcional: compila C++ y prueba IPC; requiere Qt6 dev/g++
 ```
 
 La prueba de escritorio usa una carpeta temporal, un MP3 sintético, controles de Mixxx simulados y diálogos controlados. Ejecuta el mapeo v2 y el decodificador de producción, sin crear otro puerto ALSA, importar tu música ni instalar mapeos. No demuestra integración física. Las capturas se guardan en `artifacts/`.
@@ -115,6 +124,8 @@ backend/                SQLite, importador de MP3 y coordinación de comandos
 core/                   Motor de preparación y recomendaciones locales
 adapters/simulator.mjs  Simulador bajo el mismo contrato de adaptador
 adapters/midi/          Decodificador SysEx, monitor y receptor ALSA
+adapters/native/        Cliente autenticado, validación y comprobación sin carga
+native/                 Servidor C++, enlace Mixxx y prueba de socket real
 mixxx/                  Mapeo independiente XML + JavaScript de solo lectura
 extensions/             Contratos y límites para IA/voz futuras
 tests/                  Seguridad, biblioteca, persistencia y protocolo
@@ -122,4 +133,4 @@ scripts/                Desarrollo, diagnóstico y prueba Electron
 docs/                   Arquitectura, evidencia técnica y pruebas manuales
 ```
 
-[Arquitectura y riesgos](docs/ARQUITECTURA.md) · [Integración Mixxx](docs/MIXXX.md) · [Pruebas Ubuntu](docs/PRUEBAS.md) · [Resultados de validación](docs/VALIDACION.md)
+[Arquitectura y riesgos](docs/ARQUITECTURA.md) · [Integración Mixxx](docs/MIXXX.md) · [Prototipo nativo](docs/NATIVO.md) · [Pruebas Ubuntu](docs/PRUEBAS.md) · [Resultados de validación](docs/VALIDACION.md)

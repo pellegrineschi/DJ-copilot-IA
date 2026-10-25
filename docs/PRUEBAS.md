@@ -6,6 +6,7 @@
 npm test
 npm run build
 npm run test:desktop
+npm run test:native  # opcional: g++ y Qt6 de desarrollo; ver NATIVO.md
 ```
 
 Las pruebas de Node cubren el escenario de tres temas, ambos decks activos, deck sin referencia, reserva/manualidad, no sobrescribir un preparado, carreras durante carga, cancelación, doble clic, CUE ausente/inválido, límite de BPM, telemetría vencida, recuperación, historial, estimación, importación de MP3 sintético, archivos corruptos, duplicados, no seguir enlaces, conservación de bytes, persistencia SQLite, M3U y protocolo SysEx.
@@ -40,9 +41,9 @@ Los archivos deben ser aportados por el usuario; no se descargaron ni se asumió
 5. Preparar Orgullosa, ensayar el cambio y comprobar que 18 Kilates queda pausado. El primer tema cargado manualmente queda protegido: para reutilizar Deck 1 se debe vaciar/liberar explícitamente, incluso después de detenerlo. En la demo integrada el primer tema tiene propiedad del copiloto para ejercitar el ciclo continuo.
 6. Exportar M3U8 y abrirla en Mixxx. Confirmar que las tres rutas corresponden a los archivos correctos.
 
-## Prueba física v2 con los tres MP3 (pendiente)
+## Regresión física v2 con los tres MP3
 
-El usuario ya validó telemetría v1 y coexistencia con la DDJ-200. Repetir estas comprobaciones con el nuevo preset v2 fuera de una presentación en vivo; cambiar/reconectar controladores puede requerir reiniciar Mixxx. No se necesita reproducir ni detener nada automáticamente desde Copilot.
+El usuario confirmó al iniciar etapa 3 telemetría v2, asociación, invalidación, desconexión/reconexión y coexistencia con la DDJ-200. Esta guía queda disponible para repetir la regresión fuera de una presentación en vivo; cambiar/reconectar controladores puede requerir reiniciar Mixxx. No se necesita reproducir ni detener nada automáticamente desde Copilot.
 
 1. Ejecutar `npm run doctor` y `aconnect -l`. Confirmar que hay secuenciador ALSA.
 2. Guardar/instalar el mapeo **v2** separado según [MIXXX.md](MIXXX.md). Confirmar que v1 y el mapeo original DDJ-200 no cambiaron. Elegir v2 solo en el puerto virtual.
@@ -57,7 +58,17 @@ El usuario ya validó telemetría v1 y coexistencia con la DDJ-200. Repetir esta
 11. Reiniciar/reconectar el puente. Si el puerto cambia, reactivar el controlador virtual en Mixxx. La señal debe recuperarse y la identidad seguir desconocida hasta otra asociación. Comprobar que la preparación automática permanece deshabilitada incluso después de asociar.
 12. Probar DDJ-200 durante la recepción: reproducción, jogs, faders y EQ deben mantener su comportamiento habitual. Registrar versión, puerto, los tres archivos usados y resultado por paso.
 
-Hasta completar esto no se considera validado físicamente **el nuevo mapeo v2**, aunque v1 ya fue confirmado por el usuario. La segunda prueba de carga automática real solicitada **no corresponde en esta entrega**: la capacidad está deshabilitada porque no se dispone de confirmación automática de identidad/carga. El ciclo automático sigue siendo una prueba de simulación.
+La confirmación física de etapa 2 procede del usuario; no se volvió a operar su controladora durante etapa 3. El ciclo automático real todavía no corresponde: el puente nuevo no implementa una carga transaccional segura. El ciclo automático existente sigue siendo una prueba de simulación.
+
+## Prototipo nativo de etapa 3
+
+`tests/native.test.mjs` comprueba contrato, procedencia, vínculo de biblioteca, caducidad/timeout, cancelación, ACK tardíos, historial compartido MIDI/nativo y rechazo de preparación real. Usa mensajes artificiales, no Mixxx.
+
+`npm run test:native` compila `native/bridge_server.cpp` y conecta el cliente Node mediante sockets Unix reales. Comprueba permisos/token, autorización, ocupación/revisiones, rutas, duplicados, desconexión y rechazo de todas las escrituras. El ejecutable fixture está identificado y la aplicación de producción lo rechaza. Sus archivos `.mp3` solo ejercitan rutas; no se decodifican ni producen audio.
+
+Electron también verifica el tercer modo con el puente ausente: identidad desconocida, conexión caída y botones de carga/autorización bloqueados. Captura `artifacts/nativo-prototipo.png`. Se fuerza una dirección inexistente de prueba; no intenta conectar al puente del usuario.
+
+Para compilar la variante, probar lectura/comprobación con la DDJ-200 y volver al binario estable, seguir [NATIVO.md](NATIVO.md). Allí se separan las pruebas posibles ahora de los escenarios de carga automática que requieren trabajo adicional en el motor. No se ejecutó Mixxx modificado ni se validó audio/hardware nativo en esta entrega.
 
 ## Diagnóstico
 

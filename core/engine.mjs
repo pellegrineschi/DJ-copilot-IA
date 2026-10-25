@@ -24,13 +24,16 @@ export class PreparationEngine {
   cancel() {
     this.generation++;
     this.auto = false;
+    this.adapter.cancelPending?.();
     this.onChange();
   }
   setAuto(enabled) {
     if (typeof enabled !== 'boolean') throw new Error('Estado de automatización inválido.');
     if (enabled && !this.adapter.snapshot().capabilities.loadByPath) {
       throw new SafetyError(
-        'El puente MIDI de esta versión es de solo lectura. La preparación automática está disponible en simulación.',
+        this.adapter.snapshot().mode === 'native'
+          ? this.adapter.snapshot().automationReason
+          : 'El puente MIDI de esta versión es de solo lectura. La preparación automática está disponible en simulación.',
         'UNSUPPORTED',
       );
     }
@@ -55,6 +58,7 @@ export class PreparationEngine {
     const next = this.selection();
     if (next) this.skipped.add(next.track.id);
     this.generation++;
+    this.adapter.cancelPending?.();
     this.onChange();
   }
 
@@ -67,7 +71,9 @@ export class PreparationEngine {
       );
     if (!state.capabilities.loadByPath)
       throw new SafetyError(
-        'Carga por archivo no disponible en el puente MIDI. Exportá la playlist y cargá el tema manualmente en Mixxx.',
+        state.mode === 'native'
+          ? state.automationReason
+          : 'Carga por archivo no disponible en el puente MIDI. Exportá la playlist y cargá el tema manualmente en Mixxx.',
         'UNSUPPORTED',
       );
     const active = state.decks.filter((d) => d.playing);

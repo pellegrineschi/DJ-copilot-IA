@@ -1,8 +1,8 @@
 # Integración con Mixxx: evidencia y límites
 
-Investigación inicial: 22 de octubre de 2026. Revisión de etapa 2: 25 de octubre de 2026. En el entorno se detectó `mixxx 2.5.6-1~noble` mediante `dpkg-query`. Se contrastaron las declaraciones instaladas en `/usr/share/mixxx/controllers/engine-api.d.ts` y `midi-controller-api.d.ts` con el código fuente del **tag 2.5.6**. No se presupone una API REST ni un método para cargar rutas desde un script.
+Investigación inicial: 22 de octubre de 2026. Revisiones de etapas 2 y 3: 25 de octubre de 2026. En el entorno se detectó `mixxx 2.5.6-1~noble` mediante `dpkg-query`. Se contrastaron las declaraciones instaladas en `/usr/share/mixxx/controllers/engine-api.d.ts` y `midi-controller-api.d.ts` con el código fuente del **tag 2.5.6**. No se presupone una API REST ni un método para cargar rutas desde un script.
 
-Resultado: en la versión instalada no se encontró una interfaz de controller scripting que entregue título, artista, ruta o ID estable del archivo. Se implementó **asociación manual con biblioteca**. La ruta presentada pertenece a esa selección, no a una respuesta de Mixxx. La carga automática real permanece deshabilitada.
+Resultado: en la versión instalada no se encontró una interfaz de controller scripting que entregue título, artista, ruta o ID estable del archivo. Se implementó **asociación manual con biblioteca**. La ruta presentada pertenece a esa selección, no a una respuesta de Mixxx. La carga automática real permanece deshabilitada. Etapa 3 agrega un [prototipo C++ separado](NATIVO.md) de observación y comprobación, todavía sin carga ni validación física nueva.
 
 ## Operaciones verificadas en documentación/código
 
@@ -70,7 +70,8 @@ No se instala automáticamente ningún archivo en el perfil de Mixxx y no se cam
 
 - **Informado por el usuario antes de etapa 2:** v1 recibe telemetría real de Mixxx; BPM, duración, posición, reproducción y CUE funcionan; la DDJ-200 opera simultáneamente.
 - **Verificado automáticamente en etapa 2:** scripts v1/v2 ejecutados en VM con controles de prueba, parser de producción, invalidación de identidad, orden/caducidad, asociación con archivo importado, historial y bloqueos de preparación; también UI Electron con datos aislados. No se abrió un segundo puerto físico durante esta prueba de escritorio.
-- **Pendiente de prueba física nueva:** instalar/seleccionar v2, comprobar callbacks ante reemplazos 1→1 y expulsión, desconectar/reconectar, y usar los tres MP3 reales con la DDJ-200. Los controles VM y el MP3 sintético no sustituyen esa prueba.
+- **Confirmado por el usuario al iniciar etapa 3:** MIDI v2, asociación con título/artista, invalidación por cambio de archivo, desconexión, recuperación y uso simultáneo de DDJ-200 funcionan físicamente. Se preservan los mapeos y el transporte.
+- **Pendiente:** compilar y ejecutar la variante nativa con Mixxx/DDJ-200. Las pruebas de socket C++ y controles artificiales no sustituyen esa validación.
 
 ## Protocolo v1
 
@@ -99,7 +100,7 @@ La firma y checksum detectan formatos ajenos y corrupción; no son autenticació
 
 No navegar a ciegas por la selección de la biblioteca con teclas/MIDI: el usuario podría cambiarla entre la selección y la carga. Tampoco modificar la base SQLite de Mixxx en ejecución, activar Auto DJ ni usar controles que inician reproducción.
 
-La alternativa recomendada ahora es **M3U → carga manual en Mixxx → asociación manual**. Para automatizar después, desarrollar un puente local dentro de una versión revisada de Mixxx, basado en sus interfaces C++ de carga y señales de archivo. No se instaló ni compiló una extensión nativa en esta entrega.
+La alternativa recomendada ahora es **M3U → carga manual en Mixxx → asociación manual**. Para automatizar después, desarrollar un puente local dentro de una versión revisada de Mixxx, basado en sus interfaces C++ de carga y señales de archivo. Etapa 3 incorpora ese [prototipo de observación y comprobación](NATIVO.md), con transporte compilado y probado. No se instaló ni ejecutó una variante completa de Mixxx y no se implementó carga; la auditoría encontró carreras y efectos secundarios que impiden habilitarla.
 
 Para habilitar `loadByPath`, ese puente debe aceptar una ruta canónica y un ID de operación, confirmar el archivo efectivamente cargado (ruta/ID estable y, si corresponde, hash), y operar con un estado/generación esperado del destino. Debe exigir una reserva explícita, rechazar decks activos o preparados manualmente, emitir ACK/error con timeout y revalidar cada paso dentro de Mixxx si el DJ interviene. Solo después de confirmar la carga podría ajustar tempo dentro del margen y CUE verificado, comprobar de nuevo archivo y pausa y avisar «preparado». Nunca resolver una carrera deteniendo reproducción ni iniciar play. Ninguna de estas garantías se obtiene simplemente enviando `LoadSelectedTrack`.
 

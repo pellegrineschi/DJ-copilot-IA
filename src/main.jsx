@@ -110,6 +110,8 @@ function App() {
 
   const simulation = state.connection.mode === 'simulation';
   const connected = state.connection.connected;
+  const native = state.connection.mode === 'native';
+  const canPrepare = state.connection.capabilities.loadByPath && connected;
   const next = state.recommendation;
   const selectedPlaylist = state.playlists.find((p) => p.id === state.playlistId);
   const played = new Set(state.playedIds);
@@ -331,9 +333,13 @@ function App() {
               <i />
               {simulation
                 ? 'SIMULACIÓN'
-                : connected
-                  ? 'MIDI · SOLO LECTURA'
-                  : 'MIDI · SIN CONEXIÓN'}
+                : native
+                  ? connected
+                    ? 'NATIVO · PROTOTIPO'
+                    : 'NATIVO · SIN CONEXIÓN'
+                  : connected
+                    ? 'MIDI · SOLO LECTURA'
+                    : 'MIDI · SIN CONEXIÓN'}
             </span>
           </div>
         </header>
@@ -396,11 +402,18 @@ function App() {
               <Radio size={18} />
               <div>
                 <strong>
-                  {connected ? 'Monitor real de Mixxx · solo lectura' : 'Esperando conexión MIDI'}
+                  {native
+                    ? 'Puente nativo · prototipo de observación'
+                    : connected
+                      ? 'Monitor real de Mixxx · solo lectura'
+                      : 'Esperando conexión MIDI'}
                 </strong>
                 <span>{state.connection.message}</span>
               </div>
-              <button className="text-button" onClick={() => send('mode', { mode: 'midi' })}>
+              <button
+                className="text-button"
+                onClick={() => send('mode', { mode: state.connection.mode })}
+              >
                 Reconectar
               </button>
             </div>
@@ -416,23 +429,28 @@ function App() {
                   <div>
                     <strong>Preparación automática</strong>
                     <span>
-                      {!simulation
-                        ? 'No disponible en Mixxx · sin carga por ruta verificada'
-                        : state.engine.pending
-                          ? 'Verificando y preparando el próximo deck…'
-                          : state.engine.auto
-                            ? 'Activa · espera un deck libre y un CUE válido'
-                            : 'Desactivada · prepará cada tema cuando quieras'}
+                      {native
+                        ? 'Bloqueada · falta carga atómica dentro de Mixxx'
+                        : !simulation
+                          ? 'No disponible en Mixxx · sin carga por ruta verificada'
+                          : state.engine.pending
+                            ? 'Verificando y preparando el próximo deck…'
+                            : state.engine.auto
+                              ? 'Activa · espera un deck libre y un CUE válido'
+                              : 'Desactivada · prepará cada tema cuando quieras'}
                     </span>
                   </div>
                   <Toggle
                     checked={state.engine.auto}
                     label="Preparación automática"
-                    disabled={!simulation}
+                    disabled={!canPrepare}
                     onChange={(enabled) => send('auto', { enabled })}
                   />
                 </div>
                 <div className="safe-control">
+                  <button className="text-button" onClick={() => send('cancelPreparation')}>
+                    Modo manual / Cancelar
+                  </button>
                   <ShieldCheck size={16} />
                   <span>Modo seguro</span>
                   <Toggle
@@ -448,6 +466,7 @@ function App() {
                     key={deck.id}
                     deck={deck}
                     simulation={simulation}
+                    native={native}
                     connected={connected}
                     send={send}
                     recorded={played.has(deck.trackId)}
@@ -539,13 +558,34 @@ function App() {
                       </div>
                       <button
                         className="button primary prepare-button"
-                        disabled={!simulation || state.engine.pending || playingCount !== 1}
+                        disabled={!canPrepare || state.engine.pending || playingCount !== 1}
                         onClick={() => send('prepare')}
                       >
                         <AudioLines size={17} />
                         {state.engine.pending ? 'Preparando…' : 'Preparar siguiente'}
                         <ArrowRight size={16} />
                       </button>
+                      {native && (
+                        <div className="native-check">
+                          <p>
+                            Comprobá el archivo y el deck autorizado. Esta acción no carga música.
+                          </p>
+                          <button
+                            className="button"
+                            disabled={
+                              !connected ||
+                              state.connection.pending ||
+                              !state.connection.decks.some((d) => d.nativeAuthorized)
+                            }
+                            onClick={() => send('native.inspect', { trackId: next.track.id })}
+                          >
+                            {state.connection.pending ? 'Comprobando…' : 'Comprobar archivo y deck'}
+                          </button>
+                          {state.connection.lastCheck && (
+                            <p role="status">{state.connection.lastCheck.message}</p>
+                          )}
+                        </div>
+                      )}
                       <div className="recommendation-actions">
                         <button className="text-button" onClick={() => send('skip')}>
                           <SkipForward size={14} />
@@ -837,7 +877,7 @@ function App() {
                   {simulation && <Check size={20} />}
                 </button>
                 <button
-                  className={`mode-choice ${!simulation ? 'chosen' : ''}`}
+                  className={`mode-choice ${!simulation && !native ? 'chosen' : ''}`}
                   onClick={() => send('mode', { mode: 'midi' })}
                 >
                   <Radio size={22} />
@@ -845,7 +885,18 @@ function App() {
                     <strong>Mixxx por MIDI / ALSA</strong>
                     <span>BPM, reproducción, posición y CUE · solo lectura</span>
                   </div>
-                  {!simulation && <Check size={20} />}
+                  {!simulation && !native && <Check size={20} />}
+                </button>
+                <button
+                  className={`mode-choice ${native ? 'chosen' : ''}`}
+                  onClick={() => send('mode', { mode: 'native' })}
+                >
+                  <Unplug size={22} />
+                  <div>
+                    <strong>Mixxx nativo · prototipo</strong>
+                    <span>Requiere variante aislada · identidad y comprobación, sin carga</span>
+                  </div>
+                  {native && <Check size={20} />}
                 </button>
                 <div className="connection-message">
                   <span className="eyebrow">ESTADO DEL ADAPTADOR</span>
@@ -855,19 +906,29 @@ function App() {
                       <li>
                         Telemetría: {connected ? 'reciente en ambos decks' : 'esperando datos'}
                       </li>
-                      <li>Identificación automática: no disponible en Mixxx 2.5.6</li>
+                      <li>
+                        Identificación automática:{' '}
+                        {native
+                          ? 'desde el puente nativo, después de confirmar carga'
+                          : 'no disponible por MIDI en Mixxx 2.5.6'}
+                      </li>
                       <li>
                         Asociación manual:{' '}
-                        {connected && state.connection.capabilities.manualIdentity
-                          ? 'disponible con mapeo v2'
-                          : 'requiere mapeo v2 y señal reciente'}
+                        {native
+                          ? 'disponible al volver al modo MIDI v2'
+                          : connected && state.connection.capabilities.manualIdentity
+                            ? 'disponible con mapeo v2'
+                            : 'requiere mapeo v2 y señal reciente'}
                       </li>
                       <li>Carga automática: deshabilitada</li>
                     </ul>
                   )}
                 </div>
                 {!simulation && (
-                  <button className="button" onClick={() => send('mode', { mode: 'midi' })}>
+                  <button
+                    className="button"
+                    onClick={() => send('mode', { mode: state.connection.mode })}
+                  >
                     <RotateCcw size={15} />
                     Reiniciar puente
                   </button>
@@ -889,68 +950,120 @@ function App() {
               </section>
               <section className="card setup-card">
                 <span className="eyebrow">MIXXX 2.5.6 · UBUNTU</span>
-                <h2>Un mapeo independiente</h2>
-                <ol className="setup-steps">
-                  <li>
-                    <span>01</span>
-                    <div>
-                      <strong>Guardá los dos archivos del mapeo v2</strong>
+                <h2>{native ? 'Una variante aislada de Mixxx' : 'Un mapeo independiente'}</h2>
+                {native && (
+                  <div className="info-box">
+                    <CircleHelp size={19} />
+                    <p>
+                      El puente nativo requiere compilar la variante de desarrollo con perfil
+                      separado. Seguí docs/NATIVO.md. El Mixxx estable y la DDJ-200 conservan su
+                      configuración. La carga real continúa deshabilitada.
+                    </p>
+                  </div>
+                )}
+                {native ? (
+                  <ol className="setup-steps">
+                    <li>
+                      <span>01</span>
+                      <div>
+                        <strong>Prepará la variante de desarrollo</strong>
+                        <p>
+                          La guía NATIVO.md explica cómo compilar el puente en un checkout y un
+                          perfil separados. Tu Mixxx habitual no incluye este servicio.
+                        </p>
+                      </div>
+                    </li>
+                    <li>
+                      <span>02</span>
+                      <div>
+                        <strong>Usá el lanzador del prototipo</strong>
+                        <p>
+                          Cerrá Mixxx habitual cuando sea seguro. El lanzador abre la variante con
+                          su perfil propio e imprime el comando para conectar Copilot.
+                        </p>
+                      </div>
+                    </li>
+                    <li>
+                      <span>03</span>
+                      <div>
+                        <strong>Cargá desde Mixxx y comprobá la identidad</strong>
+                        <p>
+                          Importá tus MP3 en Copilot y cargalos manualmente en la variante. Podés
+                          autorizar una comprobación del otro deck detenido. Eso no carga ni prepara
+                          una canción.
+                        </p>
+                      </div>
+                    </li>
+                  </ol>
+                ) : (
+                  <>
+                    <ol className="setup-steps">
+                      <li>
+                        <span>01</span>
+                        <div>
+                          <strong>Guardá los dos archivos del mapeo v2</strong>
+                          <p>
+                            Copialos a la carpeta de controladores de usuario de Mixxx. Los nombres
+                            v2 conservan el mapeo anterior y el de la DDJ-200.
+                          </p>
+                          <button
+                            className="button small"
+                            onClick={() =>
+                              run(
+                                () => api.saveMapping(),
+                                'Mapeo guardado sin sobrescribir archivos.',
+                              )
+                            }
+                          >
+                            <Download size={14} />
+                            Guardar copia del mapeo v2
+                          </button>
+                        </div>
+                      </li>
+                      <li>
+                        <span>02</span>
+                        <div>
+                          <strong>Activá el monitor MIDI acá</strong>
+                          <p>
+                            Debe existir <code>/dev/snd/seq</code>. El puente crea el puerto virtual
+                            «DJ Copilot IA» mientras la app está abierta.
+                          </p>
+                        </div>
+                      </li>
+                      <li>
+                        <span>03</span>
+                        <div>
+                          <strong>Abrí las preferencias de Mixxx</strong>
+                          <p>
+                            En Controladores, elegí «DJ Copilot IA v2 — Asociación manual segura»
+                            solo para el puerto virtual. Usá un único mapeo por puerto y conservá la
+                            DDJ-200.
+                          </p>
+                        </div>
+                      </li>
+                      <li>
+                        <span>04</span>
+                        <div>
+                          <strong>Comprobá ambos decks</strong>
+                          <p>
+                            Al reproducir manualmente en Mixxx deberían llegar BPM, posición y
+                            estado. Solo mostramos conexión después de recibir datos válidos de los
+                            dos decks. Importá tus MP3 y usá «Asociar canción» en Cabina tras
+                            verificar el archivo en Mixxx.
+                          </p>
+                        </div>
+                      </li>
+                    </ol>
+                    <div className="info-box">
+                      <CircleHelp size={19} />
                       <p>
-                        Copialos a la carpeta de controladores de usuario de Mixxx. Los nombres v2
-                        conservan el mapeo anterior y el de la DDJ-200.
-                      </p>
-                      <button
-                        className="button small"
-                        onClick={() =>
-                          run(() => api.saveMapping(), 'Mapeo guardado sin sobrescribir archivos.')
-                        }
-                      >
-                        <Download size={14} />
-                        Guardar copia del mapeo v2
-                      </button>
-                    </div>
-                  </li>
-                  <li>
-                    <span>02</span>
-                    <div>
-                      <strong>Activá el monitor MIDI acá</strong>
-                      <p>
-                        Debe existir <code>/dev/snd/seq</code>. El puente crea el puerto virtual «DJ
-                        Copilot IA» mientras la app está abierta.
+                        En Mixxx 2.5.6 la API del mapeo no expone título ni ruta. La asociación es
+                        manual y se descarta al cambiar de canción. La carga real sigue
+                        deshabilitada: exportá una playlist M3U y cargá los temas desde Mixxx.
                       </p>
                     </div>
-                  </li>
-                  <li>
-                    <span>03</span>
-                    <div>
-                      <strong>Abrí las preferencias de Mixxx</strong>
-                      <p>
-                        En Controladores, elegí «DJ Copilot IA v2 — Asociación manual segura» solo
-                        para el puerto virtual. Usá un único mapeo por puerto y conservá la DDJ-200.
-                      </p>
-                    </div>
-                  </li>
-                  <li>
-                    <span>04</span>
-                    <div>
-                      <strong>Comprobá ambos decks</strong>
-                      <p>
-                        Al reproducir manualmente en Mixxx deberían llegar BPM, posición y estado.
-                        Solo mostramos conexión después de recibir datos válidos de los dos decks.
-                        Importá tus MP3 y usá «Asociar canción» en Cabina tras verificar el archivo
-                        en Mixxx.
-                      </p>
-                    </div>
-                  </li>
-                </ol>
-                <div className="info-box">
-                  <CircleHelp size={19} />
-                  <p>
-                    En Mixxx 2.5.6 la API del mapeo no expone título ni ruta. La asociación es
-                    manual y se descarta al cambiar de canción. La carga real sigue deshabilitada:
-                    exportá una playlist M3U y cargá los temas desde Mixxx.
-                  </p>
-                </div>
+                  </>
+                )}
               </section>
             </div>
           )}
@@ -996,11 +1109,13 @@ function App() {
                             {item.artist} ·{' '}
                             {item.mode === 'simulation'
                               ? 'SIMULACIÓN'
-                              : item.identity_source === 'manual'
-                                ? 'MIDI · REGISTRO MANUAL'
-                                : item.identity_source === 'confirmed'
-                                  ? 'MIDI · CONFIRMADO AUTOMÁTICAMENTE'
-                                  : 'MIDI · ORIGEN NO CONFIRMADO'}
+                              : item.mode === 'native'
+                                ? 'NATIVO · CONFIRMADO POR MIXXX'
+                                : item.identity_source === 'manual'
+                                  ? 'MIDI · REGISTRO MANUAL'
+                                  : item.identity_source === 'confirmed'
+                                    ? 'MIDI · CONFIRMADO AUTOMÁTICAMENTE'
+                                    : 'MIDI · ORIGEN NO CONFIRMADO'}
                           </span>
                           <small>
                             {new Date(`${item.played_at.replace(' ', 'T')}Z`).toLocaleString(
@@ -1030,9 +1145,13 @@ function App() {
             <span className={`status-dot ${connected ? '' : 'offline'}`} />
             {simulation
               ? 'Motor local · simulación'
-              : connected
-                ? 'Mixxx · telemetría reciente'
-                : 'Mixxx · sin datos recientes'}
+              : native
+                ? connected
+                  ? 'Puente nativo · observación'
+                  : 'Puente nativo · sin señal'
+                : connected
+                  ? 'Mixxx · telemetría reciente'
+                  : 'Mixxx · sin datos recientes'}
           </span>
           <span>
             <Headphones size={13} />

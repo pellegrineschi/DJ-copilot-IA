@@ -2,7 +2,7 @@ import React from 'react';
 import { Disc3, LockKeyhole, UnlockKeyhole, RotateCcw, Pause, Play } from 'lucide-react';
 import { time, bpm } from '../format.js';
 
-export default function Deck({ deck, simulation, connected, send, onAssociate, recorded }) {
+export default function Deck({ deck, simulation, native, connected, send, onAssociate, recorded }) {
   const position = deck.duration
     ? Math.max(0, Math.min(100, (deck.positionSeconds / deck.duration) * 100))
     : 0;
@@ -54,46 +54,83 @@ export default function Deck({ deck, simulation, connected, send, onAssociate, r
                 : 'Identidad desconocida'}
           </span>
           <p>
-            {deck.identity?.status === 'manual' ? deck.identity.reason : deck.associationReason}
+            {['manual', 'confirmed'].includes(deck.identity?.status)
+              ? deck.identity.reason
+              : deck.associationReason}
           </p>
           {deck.identity?.path && (
             <p className="association-path" title={deck.identity.path}>
-              <strong>Ruta asociada de la biblioteca</strong>
+              <strong>
+                {deck.identity.status === 'confirmed'
+                  ? 'Ruta informada por Mixxx'
+                  : 'Ruta asociada de la biblioteca'}
+              </strong>
               <span>{deck.identity.path}</span>
             </p>
           )}
-          <div className="identity-actions">
-            <button
-              className="button small"
-              disabled={!deck.canAssociate}
-              onClick={() => onAssociate(deck)}
-              aria-label={`Asociar canción al Deck ${deck.id}`}
-            >
-              {deck.identity?.status === 'manual' ? 'Cambiar asociación' : 'Asociar canción'}
-            </button>
-            {deck.identity?.status === 'manual' && (
-              <>
-                <button
-                  className="text-button"
-                  disabled={!deck.canAssociate}
-                  onClick={() =>
-                    send('identity.clear', { deckId: deck.id, token: deck.identityToken })
-                  }
-                >
-                  Quitar asociación
+          {!native && (
+            <div className="identity-actions">
+              <button
+                className="button small"
+                disabled={!deck.canAssociate}
+                onClick={() => onAssociate(deck)}
+                aria-label={`Asociar canción al Deck ${deck.id}`}
+              >
+                {deck.identity?.status === 'manual' ? 'Cambiar asociación' : 'Asociar canción'}
+              </button>
+              {deck.identity?.status === 'manual' && (
+                <>
+                  <button
+                    className="text-button"
+                    disabled={!deck.canAssociate}
+                    onClick={() =>
+                      send('identity.clear', { deckId: deck.id, token: deck.identityToken })
+                    }
+                  >
+                    Quitar asociación
+                  </button>
+                  <button
+                    className="text-button"
+                    disabled={!deck.canAssociate || !deck.playing || recorded}
+                    onClick={() =>
+                      send('identity.record', { deckId: deck.id, token: deck.identityToken })
+                    }
+                  >
+                    {recorded ? 'Registrada manualmente' : 'Registrar reproducción manual'}
+                  </button>
+                </>
+              )}
+            </div>
+          )}
+          {native && (
+            <div className="native-deck-state">
+              <span>
+                {deck.loading
+                  ? 'Carga manual en curso'
+                  : deck.nativeAuthorized
+                    ? 'Autorizado para comprobar · 10 s'
+                    : 'Reservado · control manual'}
+              </span>
+              {deck.identity?.status === 'confirmed' && !deck.identity.libraryLinked && (
+                <p>Archivo identificado; sin coincidencia verificada en tu biblioteca importada.</p>
+              )}
+              <button
+                className="button small"
+                disabled={!connected || deck.playing || deck.loading}
+                onClick={() =>
+                  send('native.authorize', { deckId: deck.id, replace: Boolean(deck.loaded) })
+                }
+              >
+                {deck.loaded ? 'Autorizar comprobación del deck ocupado' : 'Autorizar comprobación'}
+              </button>
+              {deck.nativeAuthorized && (
+                <button className="text-button" onClick={() => send('native.reserve')}>
+                  Reservar de nuevo
                 </button>
-                <button
-                  className="text-button"
-                  disabled={!deck.canAssociate || !deck.playing || recorded}
-                  onClick={() =>
-                    send('identity.record', { deckId: deck.id, token: deck.identityToken })
-                  }
-                >
-                  {recorded ? 'Registrada manualmente' : 'Registrar reproducción manual'}
-                </button>
-              </>
-            )}
-          </div>
+              )}
+              <small>Este permiso solo permite comprobar: la carga sigue bloqueada.</small>
+            </div>
+          )}
         </div>
       )}
       <div className="deck-metrics">

@@ -85,6 +85,9 @@ export class LibraryDatabase {
   getTrack(id) {
     return mapTrack(this.db.prepare('SELECT * FROM tracks WHERE id=?').get(id));
   }
+  getTrackByPath(path) {
+    return mapTrack(this.db.prepare('SELECT * FROM tracks WHERE path=? AND is_demo=0').get(path));
+  }
   tracks({ includeDemo = true } = {}) {
     return this.db
       .prepare('SELECT * FROM tracks WHERE (? = 1 OR is_demo=0) ORDER BY is_demo, artist, title')
@@ -215,8 +218,10 @@ export class LibraryDatabase {
   played(session, mode = 'simulation') {
     return new Set(
       this.db
-        .prepare('SELECT track_id FROM history WHERE session_id=? AND mode=?')
-        .all(session, mode)
+        .prepare(
+          "SELECT track_id FROM history WHERE session_id=? AND ((?='simulation' AND mode='simulation') OR (?<>'simulation' AND mode IN ('midi','native')))",
+        )
+        .all(session, mode, mode)
         .map((r) => r.track_id),
     );
   }
@@ -232,9 +237,11 @@ export class LibraryDatabase {
   ) {
     const result = this.db
       .prepare(
-        'INSERT OR IGNORE INTO history (session_id,track_id,mode,identity_source,deck_id,load_token) VALUES (?,?,?,?,?,?)',
+        `INSERT OR IGNORE INTO history (session_id,track_id,mode,identity_source,deck_id,load_token)
+          SELECT ?,?,?,?,?,? WHERE ?='simulation' OR NOT EXISTS
+          (SELECT 1 FROM history WHERE session_id=? AND track_id=? AND mode IN ('midi','native'))`,
       )
-      .run(session, id, mode, source, deckId, loadToken);
+      .run(session, id, mode, source, deckId, loadToken, mode, session, id);
     return Boolean(result.changes);
   }
   history() {

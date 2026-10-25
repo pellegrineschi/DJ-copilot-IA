@@ -6,6 +6,7 @@ import { importFolder, hashFile } from './library.mjs';
 import { demoTracks } from './demo.mjs';
 import { SimulatorAdapter } from '../adapters/simulator.mjs';
 import { MidiMonitorAdapter } from '../adapters/midi/adapter.mjs';
+import { NativeAdapter } from '../adapters/native/adapter.mjs';
 import { PreparationEngine } from '../core/engine.mjs';
 import { estimateSet } from '../core/recommendations.mjs';
 import { canRecordAutomatically } from '../core/identity.mjs';
@@ -16,7 +17,18 @@ export class CopilotApplication extends EventEmitter {
     this.db = new LibraryDatabase(databasePath || ':memory:');
     this.adapterFactory =
       adapterFactory ||
-      ((mode) => (mode === 'simulation' ? new SimulatorAdapter() : new MidiMonitorAdapter()));
+      ((mode) =>
+        mode === 'simulation'
+          ? new SimulatorAdapter()
+          : mode === 'native'
+            ? new NativeAdapter({
+                resolveTrack: async (path) => {
+                  const track = this.db.getTrackByPath(path);
+                  if (!track || track.isDemo || !track.hash) return null;
+                  return (await hashFile(path)) === track.hash ? track : null;
+                },
+              })
+            : new MidiMonitorAdapter());
     this.playlistId = this.db.getSetting('playlistId', 'default');
     if (!this.db.playlists().some((p) => p.id === this.playlistId)) this.playlistId = 'default';
     this.sessionId = this.db.getSetting('sessionId', randomUUID());
@@ -59,6 +71,7 @@ export class CopilotApplication extends EventEmitter {
               source: state.mode === 'simulation' ? 'simulation' : 'confirmed',
               deckId: deck.id,
             }) || changed;
+          played.add(deck.trackId);
         }
       }
       if (!state.connected && this.engine.auto) {
@@ -153,16 +166,43 @@ export class CopilotApplication extends EventEmitter {
       throw new Error('Comando inválido.');
     switch (action) {
       case 'mode': {
-        if (!['simulation', 'midi'].includes(payload.mode)) throw new Error('Modo inválido.');
+        if (!['simulation', 'midi', 'native'].includes(payload.mode))
+          throw new Error('Modo inválido.');
         if (this.engine.pending)
           throw new Error('Esperá a que finalice la preparación antes de cambiar de modo.');
         this.installAdapter(payload.mode);
         this.log(
           'info',
-          payload.mode === 'midi'
-            ? 'Monitor MIDI seleccionado. No envía comandos a Mixxx.'
-            : 'Simulador seleccionado. No reproduce audio.',
+          payload.mode === 'native'
+            ? 'Puente nativo seleccionado. Carga automática bloqueada; observación y comprobación.'
+            : payload.mode === 'midi'
+              ? 'Monitor MIDI seleccionado. No envía comandos a Mixxx.'
+              : 'Simulador seleccionado. No reproduce audio.',
         );
+        break;
+      }
+      case 'cancelPreparation':
+        this.engine.cancel();
+        this.log('info', 'Preparación cancelada. Automatización desactivada.');
+        break;
+      case 'native.authorize':
+      case 'native.reserve':
+      case 'native.inspect': {
+        if (this.adapter.snapshot().mode !== 'native')
+          throw new Error('Esta acción necesita el puente nativo.');
+        if (action === 'native.authorize')
+          await this.adapter.authorize(payload.deckId, payload.replace);
+        if (action === 'native.reserve') await this.adapter.reserve();
+        if (action === 'native.inspect') {
+          const track =
+            typeof payload.trackId === 'string' ? this.db.getTrack(payload.trackId) : null;
+          if (!track || track.isDemo) throw new Error('Elegí un MP3 real importado.');
+          await this.adapter.inspect(track);
+          this.log(
+            'info',
+            'Comprobación nativa finalizada: archivo accesible y estado compatible. No se cargó ni preparó una canción.',
+          );
+        }
         break;
       }
       case 'auto':

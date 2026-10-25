@@ -1,0 +1,8 @@
+cmake_minimum_required(VERSION 3.21)
+project(CopilotNativeContract LANGUAGES CXX)
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+find_package(Qt6 6.2 REQUIRED COMPONENTS Core Network)
+add_executable(copilot-native-fixture bridge_server.cpp tests/fixture.cpp)
+target_include_directories(copilot-native-fixture PRIVATE .)
+target_link_libraries(copilot-native-fixture PRIVATE Qt6::Core Qt6::Network)

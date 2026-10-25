@@ -8,7 +8,12 @@ import electronPath from 'electron';
 import { mp3Fixture } from '../tests/helpers.mjs';
 
 const dataDir = await mkdtemp(join(tmpdir(), 'dj-copilot-desktop-'));
-const env = { ...process.env, DJ_COPILOT_DATA_DIR: dataDir, DJ_COPILOT_DEV: '0' };
+const env = {
+  ...process.env,
+  DJ_COPILOT_DATA_DIR: dataDir,
+  DJ_COPILOT_DEV: '0',
+  DJ_COPILOT_NATIVE_DIR: join(dataDir, 'no-native-bridge'),
+};
 delete env.ELECTRON_RUN_AS_NODE;
 const probe = spawnSync(electronPath, ['--version'], { encoding: 'utf8', timeout: 10000, env });
 if (probe.status !== 0)
@@ -139,9 +144,27 @@ try {
   state = await page.evaluate(() => window.copilot.snapshot());
   assert.equal(state.connection.decks[0].identity.status, 'unknown');
   assert.equal(state.history.filter((h) => h.mode === 'midi').length, 1);
+  await page.getByRole('button', { name: 'Conexión', exact: true }).click();
+  await page.getByRole('button', { name: /Mixxx nativo · prototipo/ }).click();
+  await waitForState((s) => s.connection.mode === 'native' && !s.connection.connected);
+  await page.getByRole('button', { name: 'Cabina', exact: true }).click();
+  await page.getByText('Puente nativo · prototipo de observación', { exact: true }).waitFor();
+  assert.equal(
+    await page.getByRole('switch', { name: 'Preparación automática' }).isDisabled(),
+    true,
+  );
+  assert.equal(
+    await page
+      .getByRole('button', { name: 'Autorizar comprobación', exact: true })
+      .first()
+      .isDisabled(),
+    true,
+  );
+  await page.getByRole('button', { name: 'Modo manual / Cancelar', exact: true }).click();
+  await page.screenshot({ path: 'artifacts/nativo-prototipo.png', fullPage: true });
   assert.deepEqual(errors, []);
   console.log(
-    'OK: Electron aislado, simulador, importación sintética, CUE, búsqueda, asociación manual v2, historial explícito, cambio de carga, caducidad y recuperación. No es prueba física de Mixxx.',
+    'OK: Electron aislado, simulador, importación sintética, CUE, búsqueda, asociación manual v2, historial explícito, cambio de carga, caducidad, recuperación y modo nativo sin puente con preparación bloqueada. No es prueba física de Mixxx.',
   );
   console.log(
     'Capturas: artifacts/cabina.png, artifacts/biblioteca.png, artifacts/monitor-midi.png',
