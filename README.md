@@ -2,7 +2,7 @@
 
 Aplicación de escritorio para Ubuntu con Electron, React, Vite, Node.js y SQLite. Prepara una biblioteca y permite ensayar la selección del próximo tema mientras vos decidís cuándo mezclar.
 
-**Etapa 3 · prototipo nativo:** cliente Node/UI integrado, servidor C++ con socket Unix privado, autenticación, identidad mediante señales nativas y comprobación de archivos/decks. Incluye un parche para una variante **separada de Mixxx 2.5.6**. El transporte está probado; el observador C++ compiló a objeto contra los headers reales de Mixxx. La variante completa todavía no fue compilada ni ejecutada con audio.
+**Etapa 3.1 · Mixxx experimental compilado y conectado:** se compiló y enlazó Mixxx 2.5.6 completo en un checkout separado, con interfaz, motor y puente nativo. El ejecutable real se abrió con perfil propio y Copilot de producción se conectó por socket Unix autenticado. Se verificaron 120 actualizaciones durante 30 segundos, dos decks vacíos, rechazo de escrituras y reconexión con sesión nueva. **Identidad de canciones, reproducción y DDJ-200 en modo nativo siguen pendientes de prueba física.**
 
 **La carga por ruta y preparación automática real continúan deshabilitadas.** La ruta interna de carga de Mixxx requiere cambios adicionales para evitar carreras con PLAY y resets de EQ/ganancia. No se presenta una comprobación como carga o preparación. Ver [investigación, instalación aislada, pruebas y recuperación](docs/NATIVO.md).
 
@@ -10,7 +10,7 @@ El usuario confirmó físicamente **MIDI v2**, asociación manual, invalidación
 
 ## Empezar en Ubuntu
 
-Requisitos: Node.js **24 o posterior**, npm y una sesión gráfica. Mixxx **2.5.6** es la versión investigada; Python 3 y `libasound.so.2` solo hacen falta para el monitor MIDI. La app, simulador y MIDI no necesitan módulos npm nativos de SQLite/MIDI, compilador C++ ni paquetes pip. El prototipo nativo opcional tiene requisitos de desarrollo adicionales en [NATIVO.md](docs/NATIVO.md).
+Requisitos: Node.js **24 o posterior**, npm y una sesión gráfica. Mixxx **2.5.6** es la versión investigada; Python 3 y `libasound.so.2` hacen falta para el monitor MIDI. La app, simulador y MIDI no necesitan módulos npm nativos de SQLite/MIDI, compilador C++ ni paquetes pip. Las dependencias de compilación nativa se prepararon localmente, sin instalar paquetes del sistema: ver [compilación y ejecución comprobadas](docs/COMPILACION-NATIVA.md).
 
 ```bash
 cd "/opt/lampp/htdocs/DJ copilot IA"
@@ -60,22 +60,22 @@ La demo usa los nombres solicitados, pero **BPM, duración y CUE son fixtures fi
 
 ## Alcance y límites
 
-| Función                                     | Simulación                 | Mixxx MIDI v2                      | Prototipo nativo                                           |
-| ------------------------------------------- | -------------------------- | ---------------------------------- | ---------------------------------------------------------- |
-| BPM, posición, duración, reproducción y CUE | Datos de prueba/biblioteca | Telemetría validada por el usuario | Lectura C++ pendiente de prueba física                     |
-| Título, artista e identidad                 | Biblioteca/demo            | Asociación manual                  | Señal nativa de carga y ruta; requiere variante modificada |
-| Descartar identidad al cambiar carga        | Sí                         | Generación por deck                | Señales nativas y revisión                                 |
-| Carga por ruta y preparación automática     | Simulada y protegida       | Deshabilitadas                     | Deshabilitadas                                             |
-| Ajuste de tempo y CUE                       | Simulado                   | Sin escrituras                     | Sin escrituras                                             |
-| Autorizar y comprobar archivo/deck          | No aplica                  | No aplica                          | Permiso por 10 s; nunca carga                              |
-| Mezcla, faders, EQ y efectos automáticos    | Nunca                      | Nunca                              | Nunca                                                      |
-| Biblioteca, playlist, favoritos, M3U        | Sí                         | Sí                                 | Sí                                                         |
+| Función                                     | Simulación                 | Mixxx MIDI v2                      | Prototipo nativo                                       |
+| ------------------------------------------- | -------------------------- | ---------------------------------- | ------------------------------------------------------ |
+| BPM, posición, duración, reproducción y CUE | Datos de prueba/biblioteca | Telemetría validada por el usuario | Transporte real probado; valores con música pendientes |
+| Título, artista e identidad                 | Biblioteca/demo            | Asociación manual                  | Señal nativa y ruta; confirmación con MP3 pendiente    |
+| Descartar identidad al cambiar carga        | Sí                         | Generación por deck                | Señales nativas y revisión                             |
+| Carga por ruta y preparación automática     | Simulada y protegida       | Deshabilitadas                     | Deshabilitadas                                         |
+| Ajuste de tempo y CUE                       | Simulado                   | Sin escrituras                     | Sin escrituras                                         |
+| Autorizar y comprobar archivo/deck          | No aplica                  | No aplica                          | Permiso por 10 s; nunca carga                          |
+| Mezcla, faders, EQ y efectos automáticos    | Nunca                      | Nunca                              | Nunca                                                  |
+| Biblioteca, playlist, favoritos, M3U        | Sí                         | Sí                                 | Sí                                                     |
 
 ## Prototipo nativo
 
-El Mixxx estable no contiene el puente. Para usar el nuevo modo necesitás compilar el checkout modificado y abrirlo con un perfil separado mediante `scripts/native-launch.mjs`. El lanzador imprime el comando para abrir Copilot con el directorio IPC de esa sesión. Elegí **Conexión → Mixxx nativo · prototipo**. Las instrucciones completas y los límites están en [NATIVO.md](docs/NATIVO.md); no se sustituyó tu instalación estable.
+El Mixxx estable no contiene el puente. En esta máquina el ejecutable experimental ya está en `~/src/mixxx-copilot-2.5.6/build-copilot/mixxx`, fijado al commit oficial `3ebac449e7e5fe2a0186596657696e87ce8b0e56`. Se abre con el wrapper de dependencias locales y `scripts/native-launch.mjs`, después de cerrar Mixxx habitual cuando sea seguro. El lanzador imprime el directorio IPC nuevo; Copilot debe usarlo y seleccionar **Conexión → Mixxx nativo · prototipo**. La app informa **Mixxx experimental 2.5.6**. Ver [comandos de ejecución y recuperación](docs/COMPILACION-NATIVA.md) y [pruebas físicas con los tres temas/DDJ-200](docs/DDJ200-NATIVO.md).
 
-El objetivo de cargar Orgullosa y después 18 Kilates automáticamente **todavía no se alcanzó**. La Fase A está documentada, la Fase B entrega transporte/observación/comprobación sin carga, la Fase C integra esas capacidades, y la Fase D queda bloqueada. No se incorporó OpenAI ni voz.
+La carga automática de Orgullosa y después 18 Kilates, el ajuste de BPM y el posicionamiento de CUE pertenecen a **etapa 3.2**. Esta entrega conserva su bloqueo. No se incorporó OpenAI ni voz.
 
 ## Asociar tus canciones en Mixxx
 
@@ -113,9 +113,10 @@ npm test                 # pruebas unitarias/integración locales
 npm run build            # compilación de producción
 npm run test:desktop     # abre Electron con datos temporales; genera capturas
 npm run test:native      # opcional: compila C++ y prueba IPC; requiere Qt6 dev/g++
+npm run test:native:live -- /tmp/dj-native-XXXXXX 30 # exige Mixxx experimental ya abierto
 ```
 
-La prueba de escritorio usa una carpeta temporal, un MP3 sintético, controles de Mixxx simulados y diálogos controlados. Ejecuta el mapeo v2 y el decodificador de producción, sin crear otro puerto ALSA, importar tu música ni instalar mapeos. No demuestra integración física. Las capturas se guardan en `artifacts/`.
+La prueba de escritorio usa una carpeta temporal, un MP3 sintético, controles de Mixxx simulados y diálogos controlados. Ejecuta el mapeo v2 y el decodificador de producción, sin crear otro puerto ALSA, importar tu música ni instalar mapeos. No demuestra integración física. `test:native` usa un servidor fixture; `test:native:live` exige el Mixxx real y abre Electron de producción. Usá el directorio vigente y seguí [PRUEBAS.md](docs/PRUEBAS.md), incluido el wrapper para headers locales. Capturas y logs quedan en `artifacts/`, fuera de Git.
 
 ```text
 src/                    Interfaz React y estilos locales

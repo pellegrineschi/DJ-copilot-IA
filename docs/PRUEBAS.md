@@ -6,7 +6,8 @@
 npm test
 npm run build
 npm run test:desktop
-npm run test:native  # opcional: g++ y Qt6 de desarrollo; ver NATIVO.md
+# Con las dependencias locales ya preparadas en esta máquina:
+bash scripts/native-local-env.sh "$HOME/src/dj-copilot-build-deps/root" npm run test:native
 ```
 
 Las pruebas de Node cubren el escenario de tres temas, ambos decks activos, deck sin referencia, reserva/manualidad, no sobrescribir un preparado, carreras durante carga, cancelación, doble clic, CUE ausente/inválido, límite de BPM, telemetría vencida, recuperación, historial, estimación, importación de MP3 sintético, archivos corruptos, duplicados, no seguir enlaces, conservación de bytes, persistencia SQLite, M3U y protocolo SysEx.
@@ -60,7 +61,7 @@ El usuario confirmó al iniciar etapa 3 telemetría v2, asociación, invalidaci�
 
 La confirmación física de etapa 2 procede del usuario; no se volvió a operar su controladora durante etapa 3. El ciclo automático real todavía no corresponde: el puente nuevo no implementa una carga transaccional segura. El ciclo automático existente sigue siendo una prueba de simulación.
 
-## Prototipo nativo de etapa 3
+## Prototipo nativo de etapa 3.1
 
 `tests/native.test.mjs` comprueba contrato, procedencia, vínculo de biblioteca, caducidad/timeout, cancelación, ACK tardíos, historial compartido MIDI/nativo y rechazo de preparación real. Usa mensajes artificiales, no Mixxx.
 
@@ -68,7 +69,17 @@ La confirmación física de etapa 2 procede del usuario; no se volvió a operar 
 
 Electron también verifica el tercer modo con el puente ausente: identidad desconocida, conexión caída y botones de carga/autorización bloqueados. Captura `artifacts/nativo-prototipo.png`. Se fuerza una dirección inexistente de prueba; no intenta conectar al puente del usuario.
 
-Para compilar la variante, probar lectura/comprobación con la DDJ-200 y volver al binario estable, seguir [NATIVO.md](NATIVO.md). Allí se separan las pruebas posibles ahora de los escenarios de carga automática que requieren trabajo adicional en el motor. No se ejecutó Mixxx modificado ni se validó audio/hardware nativo en esta entrega.
+La variante completa **sí se compiló y ejecutó** en etapa 3.1. La prueba adicional usa el ejecutable real, sin servidor fixture, y Electron de producción:
+
+```bash
+npm run test:native:live -- /tmp/dj-native-XXXXXX 30
+```
+
+Reemplazar el directorio por el de la sesión actual del lanzador; Mixxx debe estar abierto y sin otro Copilot conectado. El script verifica proveedor/autenticación, dos decks disponibles, continuidad, bloqueo de comandos de escritura, pérdida del socket y sesión nueva. Luego selecciona el modo nativo en Electron, comprueba los bloqueos en UI/backend y reinicia el puente. No carga archivos, no escribe controles ni cierra Mixxx; cierra solo su Electron temporal.
+
+Resultado del 29/10/2026: **aprobado**, 120 mensajes en 30 segundos con ambos decks vacíos, sin reproducir música. Reporte local `artifacts/native-3.1/live-report.json` y captura `mixxx-real-electron.png`. Identidad de archivos cargados, cambios/expulsión, BPM/duración y audio/DDJ-200 permanecen **pendientes de prueba física**. El éxito de transporte no los da por superados.
+
+Para ejecutar o recompilar, seguir [COMPILACION-NATIVA.md](COMPILACION-NATIVA.md). Para probar los tres MP3 manualmente y regresar al estable, seguir [DDJ200-NATIVO.md](DDJ200-NATIVO.md). Los resultados y problemas reales están en [VALIDACION.md](VALIDACION.md). La automatización real se mantiene fuera de esta etapa.
 
 ## Diagnóstico
 

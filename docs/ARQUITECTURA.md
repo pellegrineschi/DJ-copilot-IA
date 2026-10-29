@@ -1,4 +1,4 @@
-# Arquitectura y decisiones · etapa 3
+# Arquitectura y decisiones · etapa 3.1
 
 ## Componentes
 
@@ -41,6 +41,12 @@ La asociación guarda título/artista/ruta/hash de biblioteca por UUID, sin reem
 ## Puente nativo experimental
 
 El servidor C++ se integra de forma optativa en un checkout fijado de Mixxx 2.5.6. Recibe señales de `BaseTrackPlayer`, publica identidad solo tras éxito de carga y lee controles sin escribirlos. El cliente autentica por token local, exige permiso de filesystem, sesión, secuencia y frescura; revoca operaciones/identidad al desconectar. No hay reintentos de carga ni reconexión automática. Los decks nativos permanecen reservados manualmente; el permiso de 10 s solo autoriza una comprobación y no cambia su propiedad.
+
+En etapa 3.1 se compiló el target completo `mixxx` con Qt6/QML y PortMidi, incluyendo motor, interfaz y puente. El parche se limita a las fuentes nuevas de `src/copilot`, sus entradas CMake y el arranque desde `PlayerManager`; no modifica el motor de audio. La conexión real con Electron se verificó con dos decks vacíos y 30 segundos de estados frescos. Esta evidencia no valida todavía los eventos de carga/expulsión de MP3 ni el audio o la DDJ-200.
+
+El handshake identifica `provider=mixxx-2.5.6` y `build=copilot-2.5.6-observer-1`. El adaptador expone esos valores mientras existe la sesión y la interfaz muestra «Mixxx experimental 2.5.6». El proveedor `fixture-only` sigue rechazado en producción. Las capacidades de carga, tempo y CUE permanecen deshabilitadas independientemente de lo anunciado por el servidor.
+
+El lanzador separa binario, recursos, perfil y directorio IPC; rechaza iniciar junto a otro Mixxx detectado. Las dependencias Ubuntu extraídas en `~/src/dj-copilot-build-deps/root` se activan solo en el proceso hijo mediante un wrapper. No se instaló Mixxx ni se cambió la configuración global. Las pruebas Electron usan otra SQLite temporal. Ver [build y ejecución](COMPILACION-NATIVA.md).
 
 La comprobación toma revisiones de ambos decks y valida la ruta MP3 bajo una raíz musical explícita. No certifica decodificación, no reserva los bytes del archivo y no permite cargar después. El modo manual/cancelar, cambios de playlist/modo y desconexión invalidan operaciones. La UI muestra el resultado como comprobación, nunca como preparación.
 

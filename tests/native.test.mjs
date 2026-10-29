@@ -69,6 +69,9 @@ test('identidad confirmada solo con mensaje nativo válido; vinculación exacta 
   assert.equal(snapshot.decks[1].identity.status, 'unknown');
   assert.equal(snapshot.capabilities.loadByPath, false); // Ignores claimed server capability.
   assert.equal(snapshot.capabilities.tempo, false);
+  assert.equal(snapshot.provider, 'mixxx-2.5.6');
+  assert.equal(snapshot.build, NATIVE_BUILD);
+  assert.match(snapshot.message, /Mixxx experimental/);
   assert.equal(canRecordAutomatically(snapshot, snapshot.decks[0]), true);
   await assert.rejects(adapter.prepare(), /atómica/);
 });

@@ -1,8 +1,8 @@
-# Puente nativo · prototipo de etapa 3
+# Puente nativo · etapa 3.1
 
 **La carga automática real NO está implementada ni habilitada.** Esta entrega conecta el backend y la interfaz a un protocolo local real, incluye un servidor C++ probado y un parche de observación para un checkout separado de Mixxx 2.5.6. Permite desarrollar y verificar identidad y comprobaciones previas sin exponer escrituras sobre reproducción o mezcla. No cumple todavía la Fase B de cargar un MP3, confirmar el resultado y dejarlo preparado.
 
-El usuario confirmó físicamente la etapa 2 con Mixxx 2.5.6, MIDI v2 y DDJ-200. Ese código y sus mapeos se conservan. La nueva variante nativa **no fue ejecutada con Mixxx completo ni con la controladora**. El transporte C++ sí fue compilado y probado contra Node mediante sockets Unix reales; el observador C++ compiló a objeto contra sus headers reales, sin enlazar Mixxx completo. Ver [resultados y procedencia](VALIDACION.md).
+El usuario confirmó físicamente la etapa 2 con Mixxx 2.5.6, MIDI v2 y DDJ-200. Ese código y sus mapeos se conservan. En etapa 3.1 **se compiló y enlazó Mixxx completo, se ejecutó con perfil separado y se conectó Electron de producción al servidor real**. Se verificaron dos decks vacíos y 120 estados en 30 segundos. Identidad con música, audio y DDJ-200 siguen pendientes de intervención humana. Ver [resultados y procedencia](VALIDACION.md).
 
 ## A. Investigación y decisión
 
@@ -81,30 +81,21 @@ npm run test:desktop
 
 ## Ubuntu: preparar la variante aislada de Mixxx
 
-Procedimiento de desarrollo pendiente de ejecutar de extremo a extremo. Requiere compilar Mixxx completo con C++20 y Qt6, además de sus dependencias de audio. Usá preferentemente una máquina de desarrollo o entorno separado para la compilación. Revisá la [guía oficial](https://github.com/mixxxdj/mixxx/wiki/Compiling-on-Linux) y el [script de dependencias del commit](https://github.com/mixxxdj/mixxx/blob/3ebac449e7e5fe2a0186596657696e87ce8b0e56/tools/debian_buildenv.sh) antes de instalar dependencias. En Ubuntu 24.04 el paquete Core5Compat se llama `qt6-5compat-dev`; el nombre `libqt6core5compat6-dev` de ese script no está disponible. Ese script instala muchos paquetes con sudo; no es necesario ejecutarlo para usar la app/MIDI existente.
+La compilación completa se realizó en Ubuntu 24.04.5 con CMake 3.28.3, g++ 13.3, Qt6 6.4.2, QML y PortMidi. El checkout oficial está fijado en `3ebac449e7e5fe2a0186596657696e87ce8b0e56`, bajo `~/src/mixxx-copilot-2.5.6`. El parche existente se aplicó mediante `scripts/native-prepare.mjs` y el diff fue revisado: cuatro archivos nuevos del puente y cuatro líneas de integración en CMake/PlayerManager. No se modificaron fuentes del motor de audio.
 
-Desde la carpeta de DJ Copilot:
+Los paquetes de desarrollo se descargaron y extrajeron en `~/src/dj-copilot-build-deps/root`; no se instalaron paquetes del sistema. El intento con `sudo -n` pidió contraseña y no hizo cambios. Se resolvieron los headers públicos de FFmpeg y la ruta multiarch de OpenSSL. La receta exacta, motivos de cada grupo de dependencias, comandos ejecutados y problemas están en [COMPILACION-NATIVA.md](COMPILACION-NATIVA.md).
 
-```bash
-mkdir -p "$HOME/src"
-git clone --branch 2.5.6 --depth 1 https://github.com/mixxxdj/mixxx.git "$HOME/src/mixxx-copilot-2.5.6"
-node scripts/native-prepare.mjs "$HOME/src/mixxx-copilot-2.5.6"
-git -C "$HOME/src/mixxx-copilot-2.5.6" diff --check
-git -C "$HOME/src/mixxx-copilot-2.5.6" diff
-cmake -S "$HOME/src/mixxx-copilot-2.5.6" -B "$HOME/src/mixxx-copilot-2.5.6/build-copilot" -DCMAKE_BUILD_TYPE=RelWithDebInfo -DQT6=ON
-cmake --build "$HOME/src/mixxx-copilot-2.5.6/build-copilot" --parallel 2
-```
-
-No ejecutar `sudo make install` ni sustituir `/usr/bin/mixxx`. El parche rechaza una segunda aplicación o un checkout con cambios; conservá ese checkout para revisar el diff. La compilación del observador a objeto usó los headers reales, C++20 y `keys.pb.h` generado con Protobuf 3.21; no fue un build/link completo de Mixxx.
-
-Cerrá Mixxx estable manualmente cuando sea seguro y ejecutá, reemplazando la carpeta musical por la que contiene tus MP3:
+El binario completo está en `~/src/mixxx-copilot-2.5.6/build-copilot/mixxx`. Para abrirlo, cerrá Mixxx habitual cuando sea seguro y usá desde el proyecto:
 
 ```bash
-node scripts/native-launch.mjs "$HOME/src/mixxx-copilot-2.5.6/build-copilot/mixxx" \
+bash scripts/native-local-env.sh "$HOME/src/dj-copilot-build-deps/root" \
+  node scripts/native-launch.mjs "$HOME/src/mixxx-copilot-2.5.6/build-copilot/mixxx" \
   "/ruta/a/tus/MP3" "$HOME/src/mixxx-copilot-2.5.6/res"
 ```
 
-El lanzador rechaza otro proceso `mixxx` detectado, crea una sesión IPC nueva y usa `--settings-path` para `~/.local/share/dj-copilot/mixxx-2.5.6-prototype`. No copia el perfil ni la base del Mixxx estable. Usa `--resource-path` del checkout. La variante debe imprimir `DJ Copilot IPC: observation/preflight only; automatic loading DISABLED.`; si falla, revisar el mensaje y no reutilizar tokens/directorios viejos.
+La carpeta musical es un parámetro que debés reemplazar por una ruta existente. Para la prueba técnica se usó una carpeta vacía del proyecto. No repetir el parche sobre el checkout existente, ejecutar una instalación ni reemplazar `/usr/bin/mixxx`.
+
+El lanzador rechaza otro proceso `mixxx` detectado, crea una sesión IPC nueva y usa `--settings-path` para `~/.local/share/dj-copilot/mixxx-2.5.6-prototype`. No copia el perfil ni la base del Mixxx estable. Usa `--resource-path` del checkout. El primer arranque puede pedir carpeta musical y configuración de audio dentro de ese perfil. Si falla, revisar el log y no reutilizar tokens/directorios viejos.
 
 En otra terminal del proyecto, después de `npm run build`, ejecutá **el comando exacto impreso por el lanzador**:
 
@@ -112,11 +103,11 @@ En otra terminal del proyecto, después de `npm run build`, ejecutá **el comand
 DJ_COPILOT_NATIVE_DIR=/tmp/dj-native-XXXXXX npm start
 ```
 
-`XXXXXX` es un ejemplo: usá el directorio recién creado. Elegí **Conexión → Mixxx nativo · prototipo**. Una instalación estable sin el parche no puede conectarse. No cambiar permisos a `777`, imprimir el token ni abrir puertos de red para resolver un error.
+`XXXXXX` es un ejemplo: usá el directorio recién creado. Elegí **Conexión → Mixxx nativo · prototipo** y comprobá el mensaje **Mixxx experimental 2.5.6**. La autenticación identifica proveedor/build y la conexión exige datos recientes de ambos decks. Una instalación estable sin el parche o un servidor `fixture-only` no sirven como conexión real. No cambiar permisos a `777`, imprimir el token ni abrir puertos de red para resolver un error.
 
 ## E. Prueba física pendiente con DDJ-200
 
-Esta es una prueba de observación/comprobación, **no el escenario de carga automática solicitado**. Usá la variante en una sesión de laboratorio; configurá audio y el preset habitual de Pioneer dentro de su perfil nuevo, sin editar ni reemplazar el perfil/mapeo estable.
+La guía sencilla con los tres temas está en [DDJ200-NATIVO.md](DDJ200-NATIVO.md). Esta es una prueba de observación/comprobación; la carga automática corresponde a etapa 3.2. Usá la variante en una sesión de laboratorio; configurá audio y el preset habitual de Pioneer dentro de su perfil nuevo, sin editar ni reemplazar el perfil/mapeo estable.
 
 1. Importá en Copilot los tres MP3 reales y armá su playlist. Importalos también mediante la interfaz de la variante Mixxx. No usar las filas DEMO.
 2. Cargá manualmente El Original en Deck 1 después del arranque del puente. Verificá título/artista, ruta exacta, BPM, CUE, posición y procedencia confirmada. Un archivo no importado debe mostrar ruta nativa pero no vínculo con la biblioteca.
@@ -137,7 +128,7 @@ Antes de una entrega con carga serán obligatorios, además, los dos ciclos auto
 4. Separar esa ruta de los resets de EQ/ganancia/pitch, clonación, SYNC y demás efectos de una carga normal. No cambiar globalmente las preferencias del DJ para disimularlos.
 5. Confirmar desde el motor qué archivo/generación quedó instalado, detenido, sin confiar solamente en el candidato de UI. Error/cancelación no pueden producir una carga tardía al reconectar.
 6. Agregar tempo limitado y CUE verificado como operaciones condicionales posteriores; rechazar SYNC/cualquier estado que pueda propagar tempo al deck activo. Solo entonces habilitar capacidades y el motor de playlist existente.
-7. Compilar/linkear Mixxx completo, probar sus hilos con casos adversos y ejecutar la validación física de los tres temas/DDJ-200. Hasta obtener esa evidencia, `loadByPath`, `tempo` y `cue` permanecen `false` en servidor y cliente.
+7. Recompilar Mixxx completo con esa futura transacción, probar sus hilos con casos adversos y ejecutar la validación física de los tres temas/DDJ-200. Hasta obtener esa evidencia, `loadByPath`, `tempo` y `cue` permanecen `false` en servidor y cliente.
 
 ## Volver a la instalación estable
 

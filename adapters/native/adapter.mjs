@@ -151,6 +151,7 @@ export class NativeAdapter extends EventEmitter {
       )
         return this.fail('Fuente nativa no compatible o de prueba. No se confirmó identidad.');
       this.fixture = message.value.provider === 'fixture-only';
+      this.provider = message.value.provider;
       this.session = message.session;
       clearTimeout(this.authTimer);
       this.authTimer = setTimeout(
@@ -159,7 +160,7 @@ export class NativeAdapter extends EventEmitter {
       );
       this.message = this.fixture
         ? 'Prueba IPC nativa · sin Mixxx ni audio'
-        : 'Puente nativo de Mixxx · identidad y comprobación';
+        : 'Mixxx experimental 2.5.6 · identidad y comprobación nativa';
       return;
     }
     if (message.type === 'reply') {
@@ -323,6 +324,8 @@ export class NativeAdapter extends EventEmitter {
       message: this.message,
       decks,
       fixture: this.fixture,
+      provider: this.session ? this.provider : null,
+      build: this.session ? NATIVE_BUILD : null,
       session: this.session,
       lastCheck: this.lastCheck,
       pending: [...this.pending.values()].some((p) => p.command !== 'ping'),
